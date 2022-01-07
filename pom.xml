@@ -35,7 +35,6 @@
     <modules>
         <module>util</module>
         <module>core</module>
-        <module>server</module>
     </modules>
 
     <repositories>
@@ -51,7 +50,11 @@
         <repository>
             <id>ashcon.app</id>
             <url>https://repo.ashcon.app/content/repositories/snapshots</url>
-        </repository>        
+        </repository>
+        <repository>
+            <id>ashcon-snapshots</id>
+            <url>https://repo.ashcon.app/nexus/content/repositories/snapshots/</url>
+        </repository>
         <repository>
             <id>sonatype-oss</id>
             <url>https://oss.sonatype.org/content/repositories/snapshots</url>
@@ -76,7 +79,8 @@
             <groupId>app.ashcon</groupId>
             <artifactId>sportpaper</artifactId>
             <version>1.8.8-R0.1-SNAPSHOT</version>
-            <scope>compile</scope> <!-- Remember to exclude in shading -->
+            <scope>system</scope>
+            <systemPath>${project.basedir}/depends/sportpaper-1.8.8-R0.1-SNAPSHOT.jar</systemPath>
         </dependency>
 
         <!-- Multi-protocol library for future Minecraft versions -->
