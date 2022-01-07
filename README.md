@@ -3,6 +3,8 @@ PGM ![deploy](https://github.com/Electroid/PGM/workflows/deploy/badge.svg) [![Cr
 
 The original PvP Game Manager for Minecraft.
 
+THIS IS A FORK FOR LUCKYNETWORK AND MIGHT NOT WORK NOR BE COMPATIBLE ON YOUR SERVER
+
 Overview
 --------
 
