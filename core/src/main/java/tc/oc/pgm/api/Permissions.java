@@ -23,6 +23,7 @@ public interface Permissions {
   String RESIZE = ROOT + ".resize"; // Resize the number of players per match
   String JOIN = ROOT + ".join"; // Allowed to join a match as a participant
   String JOIN_CHOOSE = JOIN + ".choose"; // Can choose which team to join
+  String JOIN_ONGOING = JOIN + ".ongoing"; // Can choose which team to join
   String EXTRA_VOTE = JOIN + ".extravote"; // Extra map voting power
   String JOIN_FULL = ROOT + ".full"; // Can join a team or server if it is full
   String JOIN_FORCE = JOIN + ".force"; // Can force other players onto teams

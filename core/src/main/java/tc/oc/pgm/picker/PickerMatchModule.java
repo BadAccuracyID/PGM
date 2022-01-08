@@ -9,12 +9,8 @@ import static net.kyori.adventure.text.Component.translatable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import de.myzelyam.api.vanish.PlayerHideEvent;
+import java.util.*;
 import javax.annotation.Nullable;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -48,7 +44,6 @@ import tc.oc.pgm.api.setting.SettingKey;
 import tc.oc.pgm.blitz.BlitzMatchModule;
 import tc.oc.pgm.classes.ClassMatchModule;
 import tc.oc.pgm.classes.PlayerClass;
-import tc.oc.pgm.community.events.PlayerVanishEvent;
 import tc.oc.pgm.events.ListenerScope;
 import tc.oc.pgm.events.PlayerJoinMatchEvent;
 import tc.oc.pgm.events.PlayerPartyChangeEvent;
@@ -398,8 +393,13 @@ public class PickerMatchModule implements MatchModule, Listener {
   }
 
   @EventHandler
-  public void playerVanishRefresh(final PlayerVanishEvent event) {
-    refreshKit(event.getPlayer());
+  public void playerVanishRefresh(final PlayerHideEvent event) {
+    MatchPlayer player = this.match.getPlayer(event.getPlayer());
+    if (player == null) {
+      return;
+    }
+
+    refreshKit(player);
   }
 
   @EventHandler

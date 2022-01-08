@@ -1,8 +1,6 @@
 package tc.oc.pgm.command;
 
-import static net.kyori.adventure.text.Component.empty;
-import static net.kyori.adventure.text.Component.text;
-import static net.kyori.adventure.text.Component.translatable;
+import static net.kyori.adventure.text.Component.*;
 
 import app.ashcon.intake.Command;
 import java.util.Collection;
@@ -11,8 +9,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
-import tc.oc.pgm.api.PGM;
+import org.bukkit.entity.Player;
 import tc.oc.pgm.api.Permissions;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.player.MatchPlayer;
@@ -108,6 +107,7 @@ public final class ListCommand {
   }
 
   private boolean isVanished(UUID playerId) {
-    return PGM.get().getVanishManager().isVanished(playerId);
+    Player player = Bukkit.getPlayer(playerId);
+    return player != null && player.hasMetadata("vanished");
   }
 }

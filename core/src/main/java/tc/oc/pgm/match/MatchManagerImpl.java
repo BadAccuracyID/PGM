@@ -52,7 +52,7 @@ public class MatchManagerImpl implements MatchManager, Listener {
 
     final Config config = PGM.get().getConfiguration();
     this.unloadNonMatches =
-        config.getExperiments().getOrDefault("unload-non-match-worlds", "false").equals("true");
+        config.getExperiments().getOrDefault("unload-non-match-worlds", "true").equals("true");
 
     long delaySecs = (config.getStartTime().getSeconds() + 1) / 2;
     try {

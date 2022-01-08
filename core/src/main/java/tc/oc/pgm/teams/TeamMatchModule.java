@@ -4,19 +4,10 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static net.kyori.adventure.key.Key.key;
 import static net.kyori.adventure.sound.Sound.sound;
-import static net.kyori.adventure.text.Component.space;
-import static net.kyori.adventure.text.Component.text;
-import static net.kyori.adventure.text.Component.translatable;
+import static net.kyori.adventure.text.Component.*;
 import static net.kyori.adventure.title.Title.title;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import javax.annotation.Nullable;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
@@ -538,8 +529,7 @@ public class TeamMatchModule implements MatchModule, Listener, JoinHandler {
       }
     }
 
-    for (int i = 0; i < shortList.size(); i++) {
-      MatchPlayer player = shortList.get(i);
+    for (MatchPlayer player : shortList) {
       join(player, null, queryJoin(player, null, true));
     }
   }

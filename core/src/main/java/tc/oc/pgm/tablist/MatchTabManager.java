@@ -1,5 +1,6 @@
 package tc.oc.pgm.tablist;
 
+import de.myzelyam.api.vanish.PlayerHideEvent;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -23,7 +24,6 @@ import tc.oc.pgm.api.match.event.MatchUnloadEvent;
 import tc.oc.pgm.api.party.event.PartyRenameEvent;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.api.player.event.MatchPlayerDeathEvent;
-import tc.oc.pgm.community.events.PlayerVanishEvent;
 import tc.oc.pgm.events.PlayerJoinMatchEvent;
 import tc.oc.pgm.events.PlayerPartyChangeEvent;
 import tc.oc.pgm.ffa.Tribute;
@@ -310,8 +310,13 @@ public class MatchTabManager extends TabManager implements Listener {
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  public void onVanish(PlayerVanishEvent event) {
-    invalidate(event.getPlayer());
+  public void onVanish(PlayerHideEvent event) {
+    MatchPlayer player = PGM.get().getMatchManager().getPlayer(event.getPlayer());
+    if (player == null) {
+      return;
+    }
+
+    invalidate(player);
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

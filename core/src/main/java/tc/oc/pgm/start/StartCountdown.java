@@ -54,7 +54,6 @@ public class StartCountdown extends PreMatchCountdown {
   }
 
   @Override
-  @SuppressWarnings("deprecation")
   public void onTick(Duration remaining, Duration total) {
     super.onTick(remaining, total);
 

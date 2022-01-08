@@ -74,9 +74,9 @@ public interface Region extends Filter {
    *
    * @throws UnsupportedOperationException if the region's blocks are not enumerable
    */
-  public Iterator<BlockVector> getBlockVectorIterator();
+  Iterator<BlockVector> getBlockVectorIterator();
 
-  public Iterable<BlockVector> getBlockVectors();
+  Iterable<BlockVector> getBlockVectors();
 
-  public Collection<Class<? extends Event>> getRelevantEvents();
+  Collection<Class<? extends Event>> getRelevantEvents();
 }

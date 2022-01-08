@@ -2,6 +2,7 @@ package tc.oc.pgm.tablist;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
+import de.myzelyam.api.vanish.PlayerHideEvent;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -18,7 +19,6 @@ import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.party.Competitor;
 import tc.oc.pgm.api.party.Party;
 import tc.oc.pgm.api.player.MatchPlayer;
-import tc.oc.pgm.community.events.PlayerVanishEvent;
 import tc.oc.pgm.events.PlayerJoinMatchEvent;
 import tc.oc.pgm.events.PlayerPartyChangeEvent;
 import tc.oc.pgm.teams.Team;
@@ -293,9 +293,13 @@ public class MatchTabView extends TabView implements Listener {
   }
 
   @EventHandler(priority = EventPriority.MONITOR)
-  public void onPlayerVanish(PlayerVanishEvent event) {
-    updatePlayerParty(
-        event.getPlayer(), event.getPlayer().getParty(), event.getPlayer().getParty());
+  public void onPlayerVanish(PlayerHideEvent event) {
+    MatchPlayer player = this.match.getPlayer(event.getPlayer());
+    if (player == null) {
+      return;
+    }
+
+    updatePlayerParty(player, player.getParty(), player.getParty());
   }
 
   private void updatePlayerParty(

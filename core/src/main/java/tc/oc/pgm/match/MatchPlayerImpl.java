@@ -4,11 +4,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static tc.oc.pgm.util.text.PlayerComponent.player;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -53,11 +49,7 @@ import tc.oc.pgm.modules.SpectateMatchModule;
 import tc.oc.pgm.util.Audience;
 import tc.oc.pgm.util.ClassLogger;
 import tc.oc.pgm.util.TimeUtils;
-import tc.oc.pgm.util.attribute.Attribute;
-import tc.oc.pgm.util.attribute.AttributeInstance;
-import tc.oc.pgm.util.attribute.AttributeMap;
-import tc.oc.pgm.util.attribute.AttributeMapImpl;
-import tc.oc.pgm.util.attribute.AttributeModifier;
+import tc.oc.pgm.util.attribute.*;
 import tc.oc.pgm.util.bukkit.ViaUtils;
 import tc.oc.pgm.util.named.NameStyle;
 import tc.oc.pgm.util.nms.NMSHacks;
@@ -197,7 +189,10 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
 
   @Override
   public boolean isVanished() {
-    return vanished.get();
+    Player player = getBukkit();
+    if (player == null) return false;
+
+    return player.hasMetadata("vanished");
   }
 
   @Override

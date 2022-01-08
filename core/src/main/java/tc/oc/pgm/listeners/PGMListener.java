@@ -1,9 +1,7 @@
 package tc.oc.pgm.listeners;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static net.kyori.adventure.text.Component.space;
-import static net.kyori.adventure.text.Component.text;
-import static net.kyori.adventure.text.Component.translatable;
+import static net.kyori.adventure.text.Component.*;
 
 import java.util.Collection;
 import java.util.Random;
@@ -23,15 +21,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
-import org.bukkit.event.player.PlayerFishEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.event.player.PlayerLoginEvent.Result;
-import org.bukkit.event.player.PlayerPickupItemEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.vehicle.VehicleUpdateEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
@@ -46,7 +37,6 @@ import tc.oc.pgm.api.match.event.MatchFinishEvent;
 import tc.oc.pgm.api.match.event.MatchLoadEvent;
 import tc.oc.pgm.api.match.event.MatchStartEvent;
 import tc.oc.pgm.api.player.MatchPlayer;
-import tc.oc.pgm.api.player.VanishManager;
 import tc.oc.pgm.api.setting.SettingKey;
 import tc.oc.pgm.api.setting.SettingValue;
 import tc.oc.pgm.events.MapPoolAdjustEvent;
@@ -73,15 +63,13 @@ public class PGMListener implements Listener {
 
   private final Plugin parent;
   private final MatchManager mm;
-  private final VanishManager vm;
 
   // Single-write, multi-read lock used to create the first match
   private final ReentrantReadWriteLock lock;
 
-  public PGMListener(Plugin parent, MatchManager mm, VanishManager vm) {
+  public PGMListener(Plugin parent, MatchManager mm) {
     this.parent = parent;
     this.mm = mm;
-    this.vm = vm;
     this.lock = new ReentrantReadWriteLock();
   }
 
@@ -163,7 +151,7 @@ public class PGMListener implements Listener {
       MatchPlayer player = match.getPlayer(event.getPlayer());
       if (player != null) {
         // Announce actual staff join
-        announceJoinOrLeave(player, true, vm.isVanished(player.getId()));
+        announceJoinOrLeave(player, true);
       }
     }
   }
@@ -175,15 +163,15 @@ public class PGMListener implements Listener {
 
     if (event.getQuitMessage() != null) {
       // Announce actual staff quit
-      announceJoinOrLeave(player, false, vm.isVanished(player.getId()));
+      announceJoinOrLeave(player, false);
       event.setQuitMessage(null);
     }
 
     player.getMatch().removePlayer(event.getPlayer());
   }
 
-  public static void announceJoinOrLeave(MatchPlayer player, boolean join, boolean staffOnly) {
-    announceJoinOrLeave(player, join, staffOnly, false);
+  public static void announceJoinOrLeave(MatchPlayer player, boolean join) {
+    announceJoinOrLeave(player, join, false, false);
   }
 
   public static void announceJoinOrLeave(

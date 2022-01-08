@@ -8,7 +8,6 @@ public class CommunityCommandGraph extends CommandGraph {
   public void registerAll() {
     super.registerAll();
 
-    register(new ReportCommand());
     register(new ModerationCommand());
   }
 }

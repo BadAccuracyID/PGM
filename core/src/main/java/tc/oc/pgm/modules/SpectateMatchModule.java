@@ -3,11 +3,8 @@ package tc.oc.pgm.modules;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import de.myzelyam.api.vanish.PlayerVanishStateChangeEvent;
+import java.util.*;
 import java.util.stream.Collectors;
 import org.bukkit.entity.Entity;
 import org.bukkit.event.EventHandler;
@@ -19,7 +16,6 @@ import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.api.match.MatchScope;
 import tc.oc.pgm.api.player.MatchPlayer;
-import tc.oc.pgm.community.events.PlayerVanishEvent;
 import tc.oc.pgm.events.ListenerScope;
 import tc.oc.pgm.events.PlayerLeaveMatchEvent;
 
@@ -46,9 +42,14 @@ public class SpectateMatchModule implements MatchModule, Listener {
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  public void onPlayerVanish(PlayerVanishEvent event) {
-    if (!event.isVanished()) return;
-    event.getPlayer().getSpectators().forEach(p -> p.getBukkit().setSpectatorTarget(null));
+  public void onPlayerVanish(PlayerVanishStateChangeEvent event) {
+    if (!event.isVanishing()) return;
+    MatchPlayer player = this.match.getPlayer(event.getUUID());
+    if (player == null) {
+      return;
+    }
+
+    player.getSpectators().forEach(p -> p.getBukkit().setSpectatorTarget(null));
   }
 
   @EventHandler

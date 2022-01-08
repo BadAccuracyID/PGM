@@ -75,6 +75,7 @@ import tc.oc.pgm.events.PlayerPartyChangeEvent;
 import tc.oc.pgm.features.MatchFeatureContext;
 import tc.oc.pgm.filters.dynamic.Filterable;
 import tc.oc.pgm.result.CompetitorVictoryCondition;
+import tc.oc.pgm.teams.TeamMatchModule;
 import tc.oc.pgm.util.Audience;
 import tc.oc.pgm.util.ClassLogger;
 import tc.oc.pgm.util.FileUtils;
@@ -727,9 +728,22 @@ public class MatchImpl implements Match {
     }
   }
 
+  private class TeamBalancerTask implements Runnable {
+    @Override
+    public void run() {
+      Match match = MatchImpl.this.getMatch();
+      if (match.hasModule(TeamMatchModule.class)) {
+        TeamMatchModule teamMatchModule = match.needModule(TeamMatchModule.class);
+        teamMatchModule.balanceTeams();
+      }
+    }
+  }
+
   private void startTickables(MatchScope scope) {
     getExecutor(scope)
         .scheduleAtFixedRate(new TickableTask(scope), 0, TimeUtils.TICK, TimeUnit.MILLISECONDS);
+    getExecutor(scope)
+        .scheduleWithFixedDelay(new TeamBalancerTask(), 30, 60, TimeUnit.SECONDS);
   }
 
   @Nullable
@@ -742,7 +756,7 @@ public class MatchImpl implements Match {
 
     private ModuleLoader() throws ModuleLoadException {
       super(new HashMap<>(Modules.MATCH));
-      getMap().getModules().stream()
+      getMap().getModules()
           .forEach(module -> addFactory(Modules.MAP_TO_MATCH.get(module.getClass()), module));
       loadAll();
     }
