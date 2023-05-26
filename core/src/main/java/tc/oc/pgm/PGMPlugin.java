@@ -52,7 +52,6 @@ import tc.oc.pgm.listeners.JoinLeaveAnnouncer;
 import tc.oc.pgm.listeners.MatchAnnouncer;
 import tc.oc.pgm.listeners.MotdListener;
 import tc.oc.pgm.listeners.PGMListener;
-import tc.oc.pgm.listeners.ServerPingDataListener;
 import tc.oc.pgm.listeners.WorldProblemListener;
 import tc.oc.pgm.map.MapLibraryImpl;
 import tc.oc.pgm.map.includes.MapIncludeProcessorImpl;
@@ -353,7 +352,6 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
     registerEvents(new WorldProblemListener(this));
     registerEvents(new MatchAnnouncer());
     registerEvents(new MotdListener());
-    registerEvents(new ServerPingDataListener(matchManager, mapOrder, getLogger()));
     registerEvents(new JoinLeaveAnnouncer(matchManager));
   }
 

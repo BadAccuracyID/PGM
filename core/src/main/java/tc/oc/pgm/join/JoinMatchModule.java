@@ -117,7 +117,7 @@ public class JoinMatchModule implements MatchModule, Listener, JoinHandler {
 
     // If mid-match join is disabled, player cannot join for the first time after the match has
     // started
-    if (match.isRunning() && !getConfig().canAnytimeJoin()) {
+    if (match.isRunning() && !getConfig().canAnytimeJoin() && !joining.getBukkit().hasPermission(Permissions.JOIN_ONGOING)) {
       return JoinResultOption.MATCH_STARTED;
     }
 
