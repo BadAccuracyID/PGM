@@ -1355,4 +1355,9 @@ public interface NMSHacks {
 
     item.remove();
   }
+
+  static void killPlayer(Player bukkitPlayer) {
+    EntityPlayer nmsPlayer = ((CraftPlayer) bukkitPlayer).getHandle();
+    nmsPlayer.damageEntity(DamageSource.OUT_OF_WORLD, 1000);
+  }
 }

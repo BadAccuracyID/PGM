@@ -3,6 +3,7 @@ package tc.oc.pgm.util.listener;
 import java.util.Map;
 import java.util.WeakHashMap;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
@@ -15,6 +16,7 @@ import org.bukkit.util.Vector;
 import tc.oc.pgm.util.Audience;
 import tc.oc.pgm.util.block.BlockVectors;
 import tc.oc.pgm.util.event.PlayerCoarseMoveEvent;
+import tc.oc.pgm.util.nms.NMSHacks;
 
 /** A listener that calls {@link PlayerCoarseMoveEvent}. */
 public class PlayerMoveListener implements Listener {
@@ -52,6 +54,8 @@ public class PlayerMoveListener implements Listener {
     Location originalFrom = event.getFrom();
     Location originalTo = event.getTo();
 
+    this.tryVoidKill(event);
+
     Location oldTo = this.lastToLocation.get(player);
     if (oldTo != null && !oldTo.equals(originalFrom)) {
       // If this movement does not start where the last known movement ended,
@@ -88,6 +92,46 @@ public class PlayerMoveListener implements Listener {
   }
 
   /**
+   * Kills the player if they're in the void.
+   *
+   * @param event The movement event
+   */
+  private void tryVoidKill(final PlayerMoveEvent event) {
+    // ignore if event is cancelled
+    if (event.isCancelled()) {
+      return;
+    }
+
+    // Don't fire coarse events for teleports that are not "in-game"
+    // e.g. /jumpto commands
+    if (validateValidCause(event)) {
+      return;
+    }
+
+    // If the movement does not cross a block boundary, we don't care about it
+    if (validateBlockBoundary(event)) {
+      return;
+    }
+
+    // ignore if player is flying
+    Player player = event.getPlayer();
+    if (player.isFlying() || player.getAllowFlight()) {
+      return;
+    }
+
+    // ignore if player is not in survival or adventure mode
+    GameMode gameMode = player.getGameMode();
+    if (gameMode.equals(GameMode.CREATIVE) || gameMode.equals(GameMode.SPECTATOR)) {
+      return;
+    }
+
+    // we set the Y to -3 to avoid instantly killing the player on water/lava pool maps
+    if (event.getTo().getY() <= -3) {
+      NMSHacks.killPlayer(player);
+    }
+  }
+
+  /**
    * Fire a PlayerCoarseMoveEvent that wraps the given event, only if it crosses a block boundary
    *
    * @param event The movement event to potentially wrap
@@ -98,18 +142,12 @@ public class PlayerMoveListener implements Listener {
   private boolean callCoarsePlayerMove(final PlayerMoveEvent event) {
     // Don't fire coarse events for teleports that are not "in-game"
     // e.g. /jumpto commands
-    if (event instanceof PlayerTeleportEvent) {
-      PlayerTeleportEvent teleportEvent = (PlayerTeleportEvent) event;
-      if (teleportEvent.getCause() != TeleportCause.ENDER_PEARL
-          && teleportEvent.getCause() != TeleportCause.UNKNOWN) {
-        return false;
-      }
-    }
+    if (validateValidCause(event))
+      return false;
 
     // If the movement does not cross a block boundary, we don't care about it
-    if (event.getTo().getBlock().equals(event.getFrom().getBlock())) {
+    if (validateBlockBoundary(event))
       return false;
-    }
 
     // Remember whether the original event was already cancelled
     boolean wasCancelled = event.isCancelled();
@@ -126,6 +164,24 @@ public class PlayerMoveListener implements Listener {
     } else {
       return false;
     }
+  }
+
+  private static boolean validateValidCause(PlayerMoveEvent event) {
+    if (event instanceof PlayerTeleportEvent) {
+      PlayerTeleportEvent teleportEvent = (PlayerTeleportEvent) event;
+      if (teleportEvent.getCause() != TeleportCause.ENDER_PEARL
+          && teleportEvent.getCause() != TeleportCause.UNKNOWN) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean validateBlockBoundary(PlayerMoveEvent event) {
+    if (event.getTo().getBlock().equals(event.getFrom().getBlock())) {
+      return true;
+    }
+    return false;
   }
 
   /**
