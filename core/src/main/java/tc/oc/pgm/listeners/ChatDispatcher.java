@@ -84,7 +84,7 @@ public class ChatDispatcher implements Listener {
   private static final String DM_SYMBOL = "@";
   private static final String ADMIN_CHAT_SYMBOL = "$";
 
-  private static final String GLOBAL_FORMAT = "<%s>: %s";
+  private static final String GLOBAL_FORMAT = "%s: %s";
   private static final String PREFIX_FORMAT = "%s: %s";
   private static final String AC_FORMAT =
       TextTranslations.translateLegacy(ADMIN_CHAT_PREFIX) + PREFIX_FORMAT;
