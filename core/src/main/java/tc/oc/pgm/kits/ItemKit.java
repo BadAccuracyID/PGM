@@ -10,16 +10,35 @@ import org.bukkit.entity.HumanEntity;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import tc.oc.pgm.api.player.MatchPlayer;
+import tc.oc.pgm.kits.tag.ItemModifier;
 import tc.oc.pgm.util.inventory.InventoryUtils;
 
 public class ItemKit implements KitDefinition {
 
   protected final ImmutableMap<Slot, ItemStack> slotItems;
   protected final ImmutableList<ItemStack> freeItems;
+  protected final boolean repairTools;
+  protected final boolean deductTools;
+  protected final boolean deductItems;
+  protected final boolean dropOverflow;
 
   public ItemKit(Map<Slot, ItemStack> slotItems, List<ItemStack> freeItems) {
-    this.slotItems = ImmutableMap.copyOf(slotItems);
-    this.freeItems = ImmutableList.copyOf(freeItems);
+    this(slotItems, freeItems, true, true, true, false);
+  }
+
+  public ItemKit(
+      Map<Slot, ItemStack> slotItems,
+      List<ItemStack> freeItems,
+      boolean repairTools,
+      boolean deductTools,
+      boolean deductItems,
+      boolean dropOverflow) {
+    this.slotItems = slotItems == null ? ImmutableMap.of() : ImmutableMap.copyOf(slotItems);
+    this.freeItems = freeItems == null ? ImmutableList.of() : ImmutableList.copyOf(freeItems);
+    this.repairTools = repairTools;
+    this.deductTools = deductTools;
+    this.deductItems = deductItems;
+    this.dropOverflow = dropOverflow;
   }
 
   public ImmutableMap<Slot, ItemStack> getSlotItems() {
@@ -43,7 +62,7 @@ public class ItemKit implements KitDefinition {
    */
   @Override
   public void apply(MatchPlayer player, boolean force, List<ItemStack> displacedItems) {
-    ApplyItemKitEvent event = new ApplyItemKitEvent(player, this);
+    ApplyItemKitEvent event = new ApplyItemKitEvent(player, this, force, displacedItems);
     player.getMatch().callEvent(event);
     if (event.isCancelled()) {
       return;
@@ -52,15 +71,21 @@ public class ItemKit implements KitDefinition {
     final HumanEntity holder = player.getBukkit();
     final PlayerInventory inv = player.getBukkit().getInventory();
 
+    // Apply all item modifications (eg: team-colors)
+    for (ItemStack item : event.getItems()) {
+      ItemModifier.apply(item, player);
+    }
+
     if (force) {
       for (Entry<Slot, ItemStack> kitEntry : event.getSlotItems().entrySet()) {
         kitEntry.getKey().putItem(holder, kitEntry.getValue().clone());
       }
     } else {
       // Tools in the player's inv are repaired using matching tools in the kit with less damage
-      for (ItemStack kitStack : event.getItems()) {
-        for (ItemStack invStack : inv.getContents()) {
-          if (invStack != null) {
+      if (repairTools) {
+        for (ItemStack kitStack : event.getItems()) {
+          for (ItemStack invStack : inv.getContents()) {
+            if (invStack == null) continue;
             if (kitStack.getAmount() > 0
                 && kitStack.getType().getMaxDurability() > 0
                 && kitStack.getType().equals(invStack.getType())
@@ -76,33 +101,35 @@ public class ItemKit implements KitDefinition {
       }
 
       // Items in the player's inv that stack with kit items are deducted from the kit
-      for (ItemStack invStackOrig : inv.getContents()) {
-        if (invStackOrig != null) {
-          ItemStack invStack = invStackOrig.clone();
+      if (deductTools || deductItems) {
+        for (ItemStack invStack : inv.getContents()) {
+          if (invStack == null) continue;
+          boolean deduct = invStack.getType().getMaxDurability() > 0 ? deductTools : deductItems;
+          if (!deduct) continue;
+
+          int maxAmount = invStack.getAmount();
           for (ItemStack kitStack : event.getItems()) {
-            if (kitStack.isSimilar(invStack)) {
-              int reduce = Math.min(invStack.getAmount(), kitStack.getAmount());
-              if (reduce > 0) {
-                invStack.setAmount(invStack.getAmount() - reduce);
-                kitStack.setAmount(kitStack.getAmount() - reduce);
-              }
+            if (!kitStack.isSimilar(invStack)) continue;
+            int reduce = Math.min(maxAmount, kitStack.getAmount());
+            if (reduce > 0) {
+              kitStack.setAmount(kitStack.getAmount() - reduce);
+              if ((maxAmount -= reduce) <= 0) break;
             }
           }
         }
       }
 
       // Fill partial stacks of kit items that are already in the player's inv.
-      // We must do this in a seperate pass so that kit stacks don't combine with
+      // We must do this in a separate pass so that kit stacks don't combine with
       // other kit stacks.
       for (ItemStack kitStack : event.getItems()) {
         for (ItemStack invStack : inv.getContents()) {
-          if (invStack != null && kitStack.isSimilar(invStack)) {
-            int transfer =
-                Math.min(kitStack.getAmount(), invStack.getMaxStackSize() - invStack.getAmount());
-            if (transfer > 0) {
-              kitStack.setAmount(kitStack.getAmount() - transfer);
-              invStack.setAmount(invStack.getAmount() + transfer);
-            }
+          if (invStack == null || !kitStack.isSimilar(invStack)) continue;
+          int transfer =
+              Math.min(kitStack.getAmount(), invStack.getMaxStackSize() - invStack.getAmount());
+          if (transfer > 0) {
+            kitStack.setAmount(kitStack.getAmount() - transfer);
+            invStack.setAmount(invStack.getAmount() + transfer);
           }
         }
       }
@@ -110,21 +137,27 @@ public class ItemKit implements KitDefinition {
       // Put the remaining kit slotted items into their designated inv slots.
       // If a slot is occupied, add the stack to displacedStacks.
       for (Entry<Slot, ItemStack> kitEntry : event.getSlotItems().entrySet()) {
-        Slot kitSlot = kitEntry.getKey();
         ItemStack kitStack = kitEntry.getValue();
+        if (kitStack.getAmount() <= 0) continue;
 
-        if (kitStack.getAmount() > 0) {
-          if (InventoryUtils.isNothing(kitSlot.getItem(holder))) {
-            kitSlot.putItem(holder, kitStack);
-          } else {
-            displacedItems.add(kitStack);
-          }
+        Slot kitSlot = kitEntry.getKey();
+        if (InventoryUtils.isNothing(kitSlot.getItem(holder))) {
+          kitSlot.putItem(holder, kitStack);
+        } else {
+          displacedItems.add(kitStack);
         }
       }
     }
 
     // Add the kit's free items to displacedItems
     displacedItems.addAll(event.getFreeItems());
+  }
+
+  @Override
+  public void applyLeftover(MatchPlayer player, List<ItemStack> leftover) {
+    if (!dropOverflow || leftover.isEmpty()) return;
+    for (ItemStack item : leftover) player.getWorld().dropItemNaturally(player.getLocation(), item);
+    leftover.clear();
   }
 
   @Override

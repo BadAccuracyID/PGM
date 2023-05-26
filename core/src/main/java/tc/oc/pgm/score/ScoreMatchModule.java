@@ -1,10 +1,10 @@
 package tc.oc.pgm.score;
 
-import static com.google.common.base.Preconditions.checkState;
 import static net.kyori.adventure.key.Key.key;
 import static net.kyori.adventure.sound.Sound.sound;
 import static net.kyori.adventure.text.Component.text;
 import static net.kyori.adventure.text.Component.translatable;
+import static tc.oc.pgm.util.Assert.assertTrue;
 
 import com.google.common.collect.Lists;
 import java.time.Instant;
@@ -27,6 +27,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.util.Vector;
 import tc.oc.pgm.api.PGM;
+import tc.oc.pgm.api.filter.Filter;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.api.match.MatchScope;
@@ -62,7 +63,8 @@ public class ScoreMatchModule implements MatchModule, Listener {
     this.match.getCompetitors().forEach(competitor -> this.scores.put(competitor, 0.0));
 
     if (this.config.mercyLimit > 0) {
-      this.mercyRule = new MercyRule(this, config.scoreLimit, config.mercyLimit);
+      this.mercyRule =
+          new MercyRule(this, config.scoreLimit, config.mercyLimit, config.mercyLimitMin);
     }
   }
 
@@ -79,8 +81,12 @@ public class ScoreMatchModule implements MatchModule, Listener {
     return this.mercyRule != null;
   }
 
+  public Filter getScoreboardFilter() {
+    return this.config.scoreboardFilter;
+  }
+
   public int getScoreLimit() {
-    checkState(hasScoreLimit());
+    assertTrue(hasScoreLimit());
 
     if (hasMercyRule()) {
       return this.mercyRule.getScoreLimit();
@@ -268,7 +274,7 @@ public class ScoreMatchModule implements MatchModule, Listener {
   }
 
   private void playerScore(ScoreBox box, MatchPlayer player, double points) {
-    checkState(player.isParticipating());
+    assertTrue(player.isParticipating());
 
     if (points == 0) return;
 
@@ -294,10 +300,12 @@ public class ScoreMatchModule implements MatchModule, Listener {
     contributions.put(player, contribution);
     incrementScore(competitor, amount);
 
-    if (contribution <= PGM.get().getConfiguration().getGriefScore()) {
-      MatchPlayer mp = match.getPlayer(player);
-      if (mp == null) return;
+    MatchPlayer mp = match.getPlayer(player);
+    if (mp == null) return;
 
+    match.callEvent(new MatchPlayerScoreEvent(mp, amount));
+
+    if (contribution <= PGM.get().getConfiguration().getGriefScore()) {
       // wait until the next tick to do this so stat recording and other stuff works
       match
           .getExecutor(MatchScope.RUNNING)
@@ -330,5 +338,9 @@ public class ScoreMatchModule implements MatchModule, Listener {
     }
 
     this.match.calculateVictory();
+  }
+
+  public double getContribution(UUID player) {
+    return contributions.get(player);
   }
 }

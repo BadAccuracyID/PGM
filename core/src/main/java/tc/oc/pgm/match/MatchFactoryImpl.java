@@ -1,6 +1,6 @@
 package tc.oc.pgm.match;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
@@ -29,6 +29,7 @@ import tc.oc.pgm.api.map.MapContext;
 import tc.oc.pgm.api.map.WorldInfo;
 import tc.oc.pgm.api.map.exception.MapMissingException;
 import tc.oc.pgm.api.match.Match;
+import tc.oc.pgm.api.match.event.MatchAfterLoadEvent;
 import tc.oc.pgm.api.match.factory.MatchFactory;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.util.FileUtils;
@@ -48,7 +49,7 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
 
   protected MatchFactoryImpl(String mapId) {
     this.stages = new Stack<>();
-    this.stages.push(new InitMapStage(checkNotNull(mapId)));
+    this.stages.push(new InitMapStage(assertNotNull(mapId)));
     this.timedOut = new AtomicBoolean(false);
     this.future = Executors.newSingleThreadExecutor().submit(this);
   }
@@ -76,10 +77,10 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
 
       // Only wait if the next stage is not done, or
       // the entire factory is not timed out.
-      final long delay = stage.delay().toMillis();
-      while (!next.isDone() && !timedOut.get()) {
+      final long delay = stage.delay(timedOut.get()).toMillis();
+      while (!next.isDone() && delay > 0) {
         try {
-          Thread.sleep(Math.max(100, delay));
+          Thread.sleep(delay);
         } catch (InterruptedException e) {
           return revert(e);
         }
@@ -165,10 +166,11 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
     /**
      * Get the duration to wait before the next {@link Stage}.
      *
+     * @param timedOut If the factory has timed out, meaning it needs to move quickly.
      * @return Duration to wait.
      */
-    default Duration delay() {
-      return Duration.ZERO;
+    default Duration delay(boolean timedOut) {
+      return timedOut ? Duration.ZERO : Duration.ofMillis(100);
     }
   }
 
@@ -195,7 +197,7 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
     private final String mapId;
 
     private InitMapStage(String mapId) {
-      this.mapId = checkNotNull(mapId);
+      this.mapId = assertNotNull(mapId);
     }
 
     @Override
@@ -210,7 +212,7 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
     private File dir;
 
     private DownloadMapStage(MapContext map) {
-      this.map = checkNotNull(map);
+      this.map = assertNotNull(map);
     }
 
     private File getDirectory() {
@@ -228,7 +230,7 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
 
       final File dir = getDirectory();
       if (dir.mkdirs()) {
-        map.getSource().downloadTo(dir);
+        map.getInfo().getSource().downloadTo(dir);
       } else {
         throw new MapMissingException(dir.getPath(), "Unable to mkdirs world directory");
       }
@@ -254,12 +256,12 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
     private final String worldName;
 
     private InitWorldStage(MapContext map, String worldName) {
-      this.map = checkNotNull(map);
-      this.worldName = checkNotNull(worldName);
+      this.map = assertNotNull(map);
+      this.worldName = assertNotNull(worldName);
     }
 
     private Stage advanceSync() throws IllegalStateException {
-      final WorldInfo info = map.getWorld();
+      final WorldInfo info = map.getInfo().getWorld();
       WorldCreator creator = NMSHacks.detectWorld(worldName);
       if (creator == null) {
         creator = new WorldCreator(worldName);
@@ -277,7 +279,7 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
       world.setPVP(true);
       world.setSpawnFlags(false, false);
       world.setAutoSave(false);
-      world.setDifficulty(difficulties[map.getDifficulty()]);
+      world.setDifficulty(difficulties[map.getInfo().getDifficulty()]);
 
       return new InitMatchStage(world, map);
     }
@@ -297,8 +299,8 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
     }
 
     @Override
-    public Duration delay() {
-      return Duration.ofSeconds(3);
+    public Duration delay(boolean timedOut) {
+      return timedOut ? Duration.ZERO : Duration.ofSeconds(3);
     }
   }
 
@@ -308,13 +310,18 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
 
     private InitMatchStage(World world, MapContext map) {
       this.match =
-          new MatchImpl(Long.toString(counter.get() - 1), checkNotNull(map), checkNotNull(world));
+          new MatchImpl(Long.toString(counter.get() - 1), assertNotNull(map), assertNotNull(world));
     }
 
     private MoveMatchStage advanceSync() {
       final boolean move = PGM.get().getMatchManager().getMatches().hasNext();
       match.load();
-      return move ? new MoveMatchStage(match) : null;
+      if (move) {
+        return new MoveMatchStage(match);
+      } else {
+        match.callEvent(new MatchAfterLoadEvent(match));
+        return null;
+      }
     }
 
     @Override
@@ -342,10 +349,10 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
   /** Stage #5: teleport {@link Player}s to the {@link Match}, with time delays. */
   private static class MoveMatchStage implements Stage, Commitable {
     private final Match match;
-    private final Duration delay;
+    private final int teleportsPerSecond;
 
     private MoveMatchStage(Match match) {
-      this.match = checkNotNull(match);
+      this.match = assertNotNull(match);
 
       // Right before moving players, make sure they don't show up in tab list due to missing a team
       for (Player viewer : Bukkit.getOnlinePlayers()) {
@@ -359,23 +366,20 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
                 "dummy", "dummy", ChatColor.AQUA.toString(), "", false, false, players));
       }
 
-      Duration delay = Duration.ZERO;
+      int tpPerSecond = Integer.MAX_VALUE;
       try {
-        delay =
-            Duration.ofMillis(
-                (long)
-                    (1000f
-                        / TextParser.parseFloat(
-                            PGM.get()
-                                .getConfiguration()
-                                .getExperiments()
-                                .getOrDefault("match-teleports-per-second", "")
-                                .toString(),
-                            Range.atLeast(1f))));
+        tpPerSecond =
+            TextParser.parseInteger(
+                PGM.get()
+                    .getConfiguration()
+                    .getExperiments()
+                    .getOrDefault("match-teleports-per-second", "")
+                    .toString(),
+                Range.atLeast(1));
       } catch (TextException e) {
         // No-op, since an experimental feature
       }
-      this.delay = delay;
+      this.teleportsPerSecond = tpPerSecond;
     }
 
     private Stage advanceSync() {
@@ -383,19 +387,22 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
       for (Match otherMatch : Lists.newArrayList(PGM.get().getMatchManager().getMatches())) {
         if (match.equals(otherMatch)) continue;
 
+        int teleported = 0;
         for (MatchPlayer player : otherMatch.getPlayers()) {
+          if (teleported++ >= teleportsPerSecond) return this;
+
           final Player bukkit = player.getBukkit();
 
           otherMatch.removePlayer(bukkit);
           match.addPlayer(bukkit);
-
-          return this;
         }
         otherMatch.unload();
       }
 
       // After all players have been teleported, remove the dummy team
       NMSHacks.sendPacket(NMSHacks.teamRemovePacket("dummy"));
+
+      match.callEvent(new MatchAfterLoadEvent(match));
 
       return null;
     }
@@ -406,8 +413,8 @@ public class MatchFactoryImpl implements MatchFactory, Callable<Match> {
     }
 
     @Override
-    public Duration delay() {
-      return delay;
+    public Duration delay(boolean timedOut) {
+      return Duration.ofSeconds(1);
     }
 
     @Override

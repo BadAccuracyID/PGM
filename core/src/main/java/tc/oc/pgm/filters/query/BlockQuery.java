@@ -1,16 +1,18 @@
 package tc.oc.pgm.filters.query;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import java.util.Objects;
-import javax.annotation.Nullable;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.event.Event;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.material.MaterialData;
 import org.bukkit.util.BlockVector;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.match.Match;
 
@@ -29,18 +31,18 @@ public class BlockQuery extends Query implements tc.oc.pgm.api.filter.query.Bloc
 
   public BlockQuery(@Nullable Event event, World world, int x, int y, int z) {
     super(event);
-    this.world = checkNotNull(world);
+    this.world = assertNotNull(world);
     this.x = x;
     this.y = y;
     this.z = z;
   }
 
   public BlockQuery(@Nullable Event event, World world, BlockVector pos) {
-    this(event, world, checkNotNull(pos).getBlockX(), pos.getBlockY(), pos.getBlockZ());
+    this(event, world, assertNotNull(pos).getBlockX(), pos.getBlockY(), pos.getBlockZ());
   }
 
   public BlockQuery(@Nullable Event event, BlockState block) {
-    this(event, checkNotNull(block).getWorld(), block.getX(), block.getY(), block.getZ());
+    this(event, assertNotNull(block).getWorld(), block.getX(), block.getY(), block.getZ());
     this.block = block;
   }
 
@@ -83,6 +85,14 @@ public class BlockQuery extends Query implements tc.oc.pgm.api.filter.query.Bloc
   @Override
   public Match getMatch() {
     return PGM.get().getMatchManager().getMatch(world);
+  }
+
+  @Nullable
+  @Override
+  public Inventory getInventory() {
+    return this.block instanceof InventoryHolder
+        ? ((InventoryHolder) this.block).getInventory()
+        : null;
   }
 
   @Override

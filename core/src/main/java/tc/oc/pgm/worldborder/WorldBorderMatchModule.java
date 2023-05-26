@@ -1,30 +1,25 @@
 package tc.oc.pgm.worldborder;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
+import static tc.oc.pgm.util.Assert.assertTrue;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.Nullable;
-import org.bukkit.Location;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerTeleportEvent;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.filter.query.Query;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.api.match.MatchScope;
-import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.events.ListenerScope;
 import tc.oc.pgm.filters.query.MatchQuery;
 import tc.oc.pgm.goals.events.GoalEvent;
-import tc.oc.pgm.util.bukkit.WorldBorders;
 import tc.oc.pgm.util.collection.DefaultMapAdapter;
-import tc.oc.pgm.util.event.PlayerCoarseMoveEvent;
 
 @ListenerScope(MatchScope.LOADED)
 public class WorldBorderMatchModule implements MatchModule, Listener {
@@ -37,8 +32,8 @@ public class WorldBorderMatchModule implements MatchModule, Listener {
 
   public WorldBorderMatchModule(Match match, List<WorldBorder> borders) {
     this.match = match;
-    checkNotNull(borders);
-    checkArgument(!borders.isEmpty());
+    assertNotNull(borders);
+    assertTrue(!borders.isEmpty());
     this.borders = borders;
   }
 
@@ -152,27 +147,5 @@ public class WorldBorderMatchModule implements MatchModule, Listener {
   @EventHandler(priority = EventPriority.MONITOR)
   public void onGoalComplete(GoalEvent event) {
     update(event);
-  }
-
-  /** Prevent teleporting outside the border */
-  @EventHandler(priority = EventPriority.HIGH)
-  public void onPlayerTeleport(final PlayerTeleportEvent event) {
-    if (event.getCause() == PlayerTeleportEvent.TeleportCause.PLUGIN) {
-      if (WorldBorders.isInsideBorder(event.getFrom())
-          && !WorldBorders.isInsideBorder(event.getTo())) {
-        event.setCancelled(true);
-      }
-    }
-  }
-
-  @EventHandler(priority = EventPriority.HIGH)
-  public void onPlayerMove(final PlayerCoarseMoveEvent event) {
-    MatchPlayer player = match.getPlayer(event.getPlayer());
-    if (player != null && player.isObserving()) {
-      Location location = event.getTo();
-      if (WorldBorders.clampToBorder(location)) {
-        event.setTo(location);
-      }
-    }
   }
 }

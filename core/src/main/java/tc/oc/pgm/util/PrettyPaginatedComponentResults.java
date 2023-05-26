@@ -1,15 +1,18 @@
 package tc.oc.pgm.util;
 
-import app.ashcon.intake.CommandException;
-import java.util.ArrayList;
-import java.util.Collection;
+import static net.kyori.adventure.text.Component.text;
+import static tc.oc.pgm.util.text.TextException.exception;
+
 import java.util.List;
+import java.util.function.BiFunction;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.ComponentLike;
+import tc.oc.pgm.util.text.TextException;
 
 public abstract class PrettyPaginatedComponentResults<T> {
 
-  private Component header;
-  private int resultsPerPage;
+  private final Component header;
+  private final int resultsPerPage;
 
   /**
    * Constructor
@@ -56,10 +59,10 @@ public abstract class PrettyPaginatedComponentResults<T> {
    * Format sent to the player if no data is provided
    *
    * @return Formatted message
-   * @throws CommandException default implementation exception
+   * @throws TextException default implementation exception
    */
-  public Component formatEmpty() throws CommandException {
-    throw new CommandException("No results match!");
+  public Component formatEmpty() throws TextException {
+    throw exception("menu.page.empty");
   }
 
   /**
@@ -68,22 +71,9 @@ public abstract class PrettyPaginatedComponentResults<T> {
    * @param audience to display data to
    * @param data to display
    * @param page where the data is located
-   * @throws CommandException no match exceptions
+   * @throws TextException no match exceptions
    */
-  public void display(Audience audience, Collection<? extends T> data, int page)
-      throws CommandException {
-    display(audience, new ArrayList<>(data), page);
-  }
-
-  /**
-   * Displays a list of items based on the page to an audience
-   *
-   * @param audience to display data to
-   * @param data to display
-   * @param page where the data is located
-   * @throws CommandException no match exceptions
-   */
-  public void display(Audience audience, List<? extends T> data, int page) throws CommandException {
+  public void display(Audience audience, List<? extends T> data, int page) throws TextException {
     if (data.size() == 0) {
       audience.sendMessage(formatEmpty());
       return;
@@ -96,7 +86,7 @@ public abstract class PrettyPaginatedComponentResults<T> {
     }
 
     if (page <= 0 || page > maxPages)
-      throw new CommandException("Unknown page selected! " + maxPages + " total pages.");
+      throw exception("command.invalidPage", text(page), text(maxPages));
 
     audience.sendMessage(header);
     for (int i = resultsPerPage * (page - 1);
@@ -104,5 +94,20 @@ public abstract class PrettyPaginatedComponentResults<T> {
         i++) {
       audience.sendMessage(format(data.get(i), i));
     }
+  }
+
+  public static <T> void display(
+      Audience audience,
+      List<? extends T> data,
+      int page,
+      int resultsPerPage,
+      Component header,
+      BiFunction<T, Integer, ComponentLike> toComponent) {
+    new PrettyPaginatedComponentResults<T>(header, resultsPerPage) {
+      @Override
+      public Component format(T data, int index) {
+        return toComponent.apply(data, index).asComponent();
+      }
+    }.display(audience, data, page);
   }
 }

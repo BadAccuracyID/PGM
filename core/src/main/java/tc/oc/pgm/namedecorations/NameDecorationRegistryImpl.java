@@ -7,8 +7,6 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
@@ -21,6 +19,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.event.NameDecorationChangeEvent;
 import tc.oc.pgm.api.party.Party;
@@ -28,7 +28,7 @@ import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.events.PlayerJoinMatchEvent;
 import tc.oc.pgm.events.PlayerPartyChangeEvent;
 import tc.oc.pgm.util.named.NameDecorationProvider;
-import tc.oc.pgm.util.text.PlayerComponent;
+import tc.oc.pgm.util.player.PlayerComponent;
 import tc.oc.pgm.util.text.TextFormatter;
 
 @SuppressWarnings("UnstableApiUsage")
@@ -39,11 +39,11 @@ public class NameDecorationRegistryImpl implements NameDecorationRegistry, Liste
   private NameDecorationProvider provider;
   private final LoadingCache<UUID, DecorationCacheEntry> decorationCache =
       CacheBuilder.newBuilder()
-          .expireAfterAccess(1, TimeUnit.HOURS)
+          .expireAfterAccess(15, TimeUnit.MINUTES)
           .build(
               new CacheLoader<UUID, DecorationCacheEntry>() {
                 @Override
-                public DecorationCacheEntry load(@Nonnull UUID uuid) {
+                public DecorationCacheEntry load(@NotNull UUID uuid) {
                   return new DecorationCacheEntry(uuid);
                 }
               });
@@ -75,6 +75,7 @@ public class NameDecorationRegistryImpl implements NameDecorationRegistry, Liste
   public void onNameDecorationChange(NameDecorationChangeEvent event) {
     if (event.getUUID() == null) return;
     decorationCache.invalidate(event.getUUID());
+    PlayerComponent.RENDERER.decorationChanged(event.getUUID());
 
     final Player player = Bukkit.getPlayer(event.getUUID());
     final MatchPlayer matchPlayer = PGM.get().getMatchManager().getPlayer(player);
@@ -135,7 +136,7 @@ public class NameDecorationRegistryImpl implements NameDecorationRegistry, Liste
   }
 
   @Override
-  @Nonnull
+  @NotNull
   public NameDecorationProvider getProvider() {
     return provider;
   }

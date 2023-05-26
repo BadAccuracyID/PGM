@@ -6,16 +6,17 @@ import static net.kyori.adventure.text.Component.translatable;
 import static net.kyori.adventure.text.event.ClickEvent.openUrl;
 import static net.kyori.adventure.text.event.HoverEvent.showText;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.permissions.Permission;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.map.factory.MapSourceFactory;
 
 /** A configuration for server owners to modify {@link PGM}. */
@@ -58,7 +59,15 @@ public interface Config {
    * @return A path to a map pool, or null for no map pools.
    */
   @Nullable
-  String getMapPoolFile();
+  Path getMapPoolFile();
+
+  /**
+   * Gets a path to the includes directory.
+   *
+   * @return A path to the includes directory, or null for none.
+   */
+  @Nullable
+  Path getIncludesDirectory();
 
   /**
    * Gets a duration to wait before starting a match.
@@ -398,13 +407,14 @@ public interface Config {
   }
 
   /**
-   * Gets whether "community mode" should be installed if not present.
+   * Gets whether a simple vanish manager should be installed.
    *
-   * <p>Includes features such as /report, /warn, /freeze, and more.
+   * <p>Allows for basic usage of /vanish. If you wish to allow third-party plugins to hook-in
+   * disable this
    *
-   * @return If community mode is enabled.
+   * @return If vanish is enabled.
    */
-  boolean isCommunityMode();
+  boolean isVanishEnabled();
 
   /**
    * Gets experimental configuration settings that are not yet stable.
@@ -412,4 +422,9 @@ public interface Config {
    * @return A map of experimental settings.
    */
   Map<String, Object> getExperiments();
+
+  default boolean getExperimentAsBool(String key, boolean def) {
+    Object exp = getExperiments().getOrDefault(key, def);
+    return exp instanceof Boolean ? (Boolean) exp : exp.toString().equals("true");
+  }
 }

@@ -2,22 +2,24 @@ package tc.oc.pgm.command;
 
 import static tc.oc.pgm.util.text.TextException.exception;
 
-import app.ashcon.intake.Command;
-import app.ashcon.intake.bukkit.parametric.annotation.Sender;
-import org.bukkit.entity.Player;
-import tc.oc.pgm.api.match.Match;
+import cloud.commandframework.annotations.Argument;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
+import cloud.commandframework.annotations.CommandPermission;
+import tc.oc.pgm.api.Permissions;
+import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.inventory.ViewInventoryMatchModule;
 
 public final class InventoryCommand {
-
-  @Command(
-      aliases = {"inventory", "inv", "vi"},
-      desc = "View a player's inventory")
-  public void inventory(Match match, @Sender Player viewer, Player holder) {
-    final ViewInventoryMatchModule inventories = match.needModule(ViewInventoryMatchModule.class);
-
+  @CommandMethod("inventory|inv|vi <player>")
+  @CommandDescription("View a player's inventory")
+  @CommandPermission(Permissions.VIEW_INVENTORY)
+  public void inventory(
+      ViewInventoryMatchModule inventories,
+      MatchPlayer viewer,
+      @Argument("player") MatchPlayer holder) {
     if (inventories.canPreviewInventory(viewer, holder)) {
-      inventories.previewInventory(viewer, holder.getInventory());
+      inventories.previewInventory(viewer.getBukkit(), holder.getInventory());
     } else {
       throw exception("preview.notViewable");
     }

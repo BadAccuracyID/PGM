@@ -1,11 +1,11 @@
 package tc.oc.pgm.worldborder;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import java.time.Duration;
 import org.bukkit.util.Vector;
 import tc.oc.pgm.api.filter.Filter;
-import tc.oc.pgm.filters.StaticFilter;
+import tc.oc.pgm.filters.matcher.StaticFilter;
 
 /** Parameters for the world border. */
 public class WorldBorder {
@@ -31,14 +31,14 @@ public class WorldBorder {
       double buffer,
       double warningDistance,
       Duration warningTime) {
-    this.filter = checkNotNull(filter);
-    this.center = checkNotNull(center);
+    this.filter = assertNotNull(filter);
+    this.center = assertNotNull(center);
     this.size = size;
-    this.duration = checkNotNull(duration);
+    this.duration = assertNotNull(duration);
     this.damage = damage;
     this.buffer = buffer;
     this.warningDistance = warningDistance;
-    this.warningTime = checkNotNull(warningTime);
+    this.warningTime = assertNotNull(warningTime);
   }
 
   public boolean isMoving() {

@@ -1,6 +1,5 @@
 package tc.oc.pgm.tracker.trackers;
 
-import javax.annotation.Nullable;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -8,6 +7,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.EntityBlockFormEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.tracker.DamageResolver;
 import tc.oc.pgm.api.tracker.info.DamageInfo;
@@ -39,9 +39,10 @@ public class FallingBlockTracker extends AbstractTracker<BlockInfo> implements D
     return null;
   }
 
+  @SuppressWarnings("deprecation")
   @EventHandler(priority = EventPriority.MONITOR)
   public void onPlace(ParticipantBlockTransformEvent event) {
-    if (event.getNewState().getMaterial().hasGravity()) {
+    if (event.getNewState().getType().hasGravity()) {
       blocks()
           .trackBlockState(
               event.getNewState(),

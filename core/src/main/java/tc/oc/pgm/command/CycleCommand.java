@@ -2,11 +2,13 @@ package tc.oc.pgm.command;
 
 import static tc.oc.pgm.util.text.TextException.exception;
 
-import app.ashcon.intake.Command;
-import app.ashcon.intake.parametric.annotation.Default;
-import app.ashcon.intake.parametric.annotation.Switch;
+import cloud.commandframework.annotations.Argument;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
+import cloud.commandframework.annotations.CommandPermission;
+import cloud.commandframework.annotations.Flag;
+import cloud.commandframework.annotations.specifier.FlagYielding;
 import java.time.Duration;
-import javax.annotation.Nullable;
 import tc.oc.pgm.api.Permissions;
 import tc.oc.pgm.api.map.MapInfo;
 import tc.oc.pgm.api.map.MapOrder;
@@ -15,17 +17,15 @@ import tc.oc.pgm.cycle.CycleMatchModule;
 
 public final class CycleCommand {
 
-  @Command(
-      aliases = {"cycle"},
-      desc = "Cycle to the next match",
-      flags = "f",
-      perms = Permissions.START)
+  @CommandMethod("cycle [duration] [map]")
+  @CommandDescription("Cycle to the next match")
+  @CommandPermission(Permissions.START)
   public void cycle(
       Match match,
       MapOrder mapOrder,
-      @Nullable Duration duration,
-      @Default("next") MapInfo map,
-      @Switch('f') boolean force) {
+      @Argument("duration") Duration duration,
+      @Argument("map") @FlagYielding MapInfo map,
+      @Flag(value = "force", aliases = "f") boolean force) {
     if (match.isRunning() && !force) {
       throw exception("admin.matchRunning.cycle");
     }
@@ -37,14 +37,14 @@ public final class CycleCommand {
     match.needModule(CycleMatchModule.class).startCountdown(duration);
   }
 
-  @Command(
-      aliases = {"recycle", "rematch"},
-      desc = "Reload (cycle to) the current map",
-      usage = "[seconds]",
-      flags = "f",
-      perms = Permissions.START)
+  @CommandMethod("recycle|rematch [duration]")
+  @CommandDescription("Reload (cycle to) the current map")
+  @CommandPermission(Permissions.START)
   public void recycle(
-      Match match, MapOrder mapOrder, @Nullable Duration duration, @Switch('f') boolean force) {
+      Match match,
+      MapOrder mapOrder,
+      @Argument("duration") Duration duration,
+      @Flag(value = "force", aliases = "f") boolean force) {
     cycle(match, mapOrder, duration, match.getMap(), force);
   }
 }

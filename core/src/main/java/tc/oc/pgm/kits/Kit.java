@@ -2,9 +2,10 @@ package tc.oc.pgm.kits;
 
 import java.util.List;
 import org.bukkit.inventory.ItemStack;
+import tc.oc.pgm.action.Action;
 import tc.oc.pgm.api.player.MatchPlayer;
 
-public interface Kit {
+public interface Kit extends Action<MatchPlayer> {
 
   /**
    * Apply this kit to the given player. If force is true, the player's state is made to match the
@@ -19,7 +20,35 @@ public interface Kit {
    */
   void apply(MatchPlayer player, boolean force, List<ItemStack> displacedItems);
 
+  /**
+   * Do whatever is necessary with leftover items that couldn't make it into the players' inventory,
+   * because it was full. This is always called after apply, and trying to manually add items in
+   * displacedItems to the player's inventory.
+   *
+   * <p>This method allows the kit to prioritize items, drop them on the ground, or warn the user
+   * for example.
+   *
+   * @param player The player the kit is being given
+   * @param leftover The leftover items that couldn't fit the player inventory
+   */
+  void applyLeftover(MatchPlayer player, List<ItemStack> leftover);
+
   void remove(MatchPlayer player);
 
   boolean isRemovable();
+
+  @Override
+  default Class<MatchPlayer> getScope() {
+    return MatchPlayer.class;
+  }
+
+  @Override
+  default void trigger(MatchPlayer player) {
+    player.applyKit(this, false);
+  }
+
+  @Override
+  default void untrigger(MatchPlayer player) {
+    if (isRemovable()) remove(player);
+  }
 }

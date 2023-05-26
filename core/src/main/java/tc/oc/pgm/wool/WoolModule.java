@@ -20,6 +20,7 @@ import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.api.region.Region;
 import tc.oc.pgm.goals.GoalMatchModule;
 import tc.oc.pgm.goals.ProximityMetric;
+import tc.oc.pgm.goals.ShowOptions;
 import tc.oc.pgm.regions.RegionModule;
 import tc.oc.pgm.regions.RegionParser;
 import tc.oc.pgm.teams.Team;
@@ -31,7 +32,7 @@ import tc.oc.pgm.util.xml.InvalidXMLException;
 import tc.oc.pgm.util.xml.Node;
 import tc.oc.pgm.util.xml.XMLUtils;
 
-public class WoolModule implements MapModule {
+public class WoolModule implements MapModule<WoolMatchModule> {
   private static final Collection<MapTag> TAGS =
       ImmutableList.of(new MapTag("ctw", "wool", "Capture the Wool", true, false));
 
@@ -48,7 +49,7 @@ public class WoolModule implements MapModule {
   }
 
   @Override
-  public Collection<Class> getSoftDependencies() {
+  public Collection<Class<? extends MatchModule>> getSoftDependencies() {
     return ImmutableList.of(GoalMatchModule.class);
   }
 
@@ -57,7 +58,7 @@ public class WoolModule implements MapModule {
   }
 
   @Override
-  public MatchModule createMatchModule(Match match) {
+  public WoolMatchModule createMatchModule(Match match) {
     Multimap<Team, MonumentWool> wools = ArrayListMultimap.create();
     for (Entry<TeamFactory, MonumentWoolFactory> woolEntry : this.woolFactories.entries()) {
       Team team = match.needModule(TeamMatchModule.class).getTeam(woolEntry.getKey());
@@ -71,7 +72,7 @@ public class WoolModule implements MapModule {
 
   public static class Factory implements MapModuleFactory<WoolModule> {
     @Override
-    public Collection<Class<? extends MapModule>> getSoftDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getSoftDependencies() {
       return ImmutableList.of(RegionModule.class, TeamModule.class);
     }
 
@@ -79,7 +80,6 @@ public class WoolModule implements MapModule {
     public WoolModule parse(MapFactory factory, Logger logger, Document doc)
         throws InvalidXMLException {
       Multimap<TeamFactory, MonumentWoolFactory> woolFactories = ArrayListMultimap.create();
-      TeamModule teamModule = factory.needModule(TeamModule.class);
       RegionParser parser = factory.getRegions();
 
       for (Element woolEl : XMLUtils.flattenElements(doc.getRootElement(), "wools", "wool")) {
@@ -94,7 +94,7 @@ public class WoolModule implements MapModule {
         } else {
           placement = parser.parseRequiredRegionProperty(woolEl, "monument");
         }
-        boolean visible = XMLUtils.parseBoolean(woolEl.getAttribute("show"), true);
+        ShowOptions options = ShowOptions.parse(factory.getFilters(), woolEl);
         Boolean required = XMLUtils.parseBoolean(woolEl.getAttribute("required"), null);
 
         ProximityMetric woolProximityMetric =
@@ -119,7 +119,7 @@ public class WoolModule implements MapModule {
             new MonumentWoolFactory(
                 id,
                 required,
-                visible,
+                options,
                 team,
                 woolProximityMetric,
                 monumentProximityMetric,

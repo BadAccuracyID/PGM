@@ -22,6 +22,7 @@ import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.api.region.Region;
 import tc.oc.pgm.goals.GoalMatchModule;
 import tc.oc.pgm.goals.ProximityMetric;
+import tc.oc.pgm.goals.ShowOptions;
 import tc.oc.pgm.modes.Mode;
 import tc.oc.pgm.modes.ObjectiveModesModule;
 import tc.oc.pgm.regions.BlockBoundedValidation;
@@ -34,7 +35,7 @@ import tc.oc.pgm.util.xml.InvalidXMLException;
 import tc.oc.pgm.util.xml.Node;
 import tc.oc.pgm.util.xml.XMLUtils;
 
-public class CoreModule implements MapModule {
+public class CoreModule implements MapModule<CoreMatchModule> {
 
   private static final Collection<MapTag> TAGS =
       ImmutableList.of(new MapTag("dtc", "core", "Destroy the Core", true, false));
@@ -46,12 +47,12 @@ public class CoreModule implements MapModule {
   }
 
   @Override
-  public Collection<Class> getSoftDependencies() {
+  public Collection<Class<? extends MatchModule>> getSoftDependencies() {
     return ImmutableList.of(GoalMatchModule.class);
   }
 
   @Override
-  public MatchModule createMatchModule(Match match) {
+  public CoreMatchModule createMatchModule(Match match) {
     ImmutableList.Builder<Core> cores = new ImmutableList.Builder<>();
     for (CoreFactory factory : this.coreFactories) {
       Core core = new Core(factory, match);
@@ -69,22 +70,20 @@ public class CoreModule implements MapModule {
   }
 
   public static class Factory implements MapModuleFactory<CoreModule> {
-    private MapFactory factory;
 
     @Override
-    public Collection<Class<? extends MapModule>> getWeakDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getWeakDependencies() {
       return ImmutableList.of(ObjectiveModesModule.class);
     }
 
     @Override
-    public Collection<Class<? extends MapModule>> getSoftDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getSoftDependencies() {
       return ImmutableList.of(RegionModule.class, TeamModule.class);
     }
 
     @Override
     public CoreModule parse(MapFactory context, Logger logger, Document doc)
         throws InvalidXMLException {
-      this.factory = context;
       List<CoreFactory> coreFactories = Lists.newArrayList();
       HashMap<TeamFactory, Integer> serialNumbers = new HashMap<>();
 
@@ -104,8 +103,7 @@ public class CoreModule implements MapModule {
           region = parser.parseChildren(coreEl);
           parser.validate(region, BlockBoundedValidation.INSTANCE, new Node(coreEl));
         } else {
-          region =
-              parser.parseRequiredRegionProperty(coreEl, BlockBoundedValidation.INSTANCE, "region");
+          region = parser.parseRequiredProperty(coreEl, "region", BlockBoundedValidation.INSTANCE);
         }
 
         String id = coreEl.getAttributeValue("id");
@@ -132,7 +130,7 @@ public class CoreModule implements MapModule {
           if (coreEl.getAttribute("mode-changes") != null) {
             throw new InvalidXMLException("Cannot combine modes and mode-changes", coreEl);
           }
-          modeSet = parseModeSet(modes); // Specific set of modes
+          modeSet = parseModeSet(context, modes); // Specific set of modes
         } else if (XMLUtils.parseBoolean(coreEl.getAttribute("mode-changes"), false)) {
           modeSet = null; // All modes
         } else {
@@ -140,7 +138,7 @@ public class CoreModule implements MapModule {
         }
 
         boolean showProgress = XMLUtils.parseBoolean(coreEl.getAttribute("show-progress"), false);
-        boolean visible = XMLUtils.parseBoolean(coreEl.getAttribute("show"), true);
+        ShowOptions options = ShowOptions.parse(context.getFilters(), coreEl);
         Boolean required = XMLUtils.parseBoolean(coreEl.getAttribute("required"), null);
         ProximityMetric proximityMetric =
             ProximityMetric.parse(
@@ -151,7 +149,7 @@ public class CoreModule implements MapModule {
                 id,
                 name,
                 required,
-                visible,
+                options,
                 owner,
                 proximityMetric,
                 region,
@@ -171,7 +169,8 @@ public class CoreModule implements MapModule {
       }
     }
 
-    public ImmutableSet<Mode> parseModeSet(Node node) throws InvalidXMLException {
+    public ImmutableSet<Mode> parseModeSet(MapFactory factory, Node node)
+        throws InvalidXMLException {
       ImmutableSet.Builder<Mode> modes = ImmutableSet.builder();
       for (String modeId : node.getValue().split("\\s")) {
         Mode mode = factory.getFeatures().get(modeId, Mode.class);

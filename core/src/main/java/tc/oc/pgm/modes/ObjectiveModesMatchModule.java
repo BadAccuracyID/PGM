@@ -4,13 +4,11 @@ import static net.kyori.adventure.key.Key.key;
 import static net.kyori.adventure.sound.Sound.sound;
 import static net.kyori.adventure.text.Component.text;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import javax.annotation.Nullable;
+import java.util.stream.Collectors;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -23,7 +21,7 @@ import tc.oc.pgm.api.match.MatchScope;
 import tc.oc.pgm.api.module.exception.ModuleLoadException;
 import tc.oc.pgm.countdowns.CountdownContext;
 import tc.oc.pgm.events.ListenerScope;
-import tc.oc.pgm.filters.dynamic.FilterMatchModule;
+import tc.oc.pgm.filters.FilterMatchModule;
 
 @ListenerScope(MatchScope.LOADED)
 public class ObjectiveModesMatchModule implements MatchModule, Listener {
@@ -31,12 +29,26 @@ public class ObjectiveModesMatchModule implements MatchModule, Listener {
   private static final Sound SOUND =
       sound(key("mob.zombie.remedy"), Sound.Source.MASTER, 0.15f, 1.2f);
 
+  // Sort by what's the next known mode to trigger
+  // - Sort by remaining time (applicable while match is running).
+  // - Non-triggered filtered modes go last (if triggered, they'd have a remaining time)
+  // - Then sort by after time defined in monument mode
+  // - Lastly sort by name
+  private static final Comparator<ModeChangeCountdown> MODE_COMPARATOR =
+      Comparator.comparing(
+              ModeChangeCountdown::getRemaining, Comparator.nullsLast(Comparator.naturalOrder()))
+          .thenComparing(
+              ModeChangeCountdown::getMode,
+              Comparator.comparing((Mode m) -> m.getFilter() != null)
+                  .thenComparing(Mode::getAfter)
+                  .thenComparing(Mode::getLegacyName));
+
   private final Match match;
-  private final List<Mode> modes;
+  private final ImmutableList<Mode> modes;
   private final List<ModeChangeCountdown> countdowns;
   private final CountdownContext countdownContext;
 
-  public ObjectiveModesMatchModule(Match match, List<Mode> modes) {
+  public ObjectiveModesMatchModule(Match match, ImmutableList<Mode> modes) {
     this.match = match;
     this.modes = modes;
     this.countdowns = new ArrayList<>(this.modes.size());
@@ -52,6 +64,7 @@ public class ObjectiveModesMatchModule implements MatchModule, Listener {
       if (mode.getFilter() != null) {
         // if filter returns ALLOW at any time in the match, start countdown for mode change
         fmm.onRise(
+            Match.class,
             mode.getFilter(),
             listener -> {
               if (!this.countdownContext.isRunning(countdown) && match.isRunning()) {
@@ -78,6 +91,10 @@ public class ObjectiveModesMatchModule implements MatchModule, Listener {
     }
   }
 
+  public ImmutableList<Mode> getModes() {
+    return modes;
+  }
+
   public CountdownContext getCountdown() {
     return this.countdownContext;
   }
@@ -88,42 +105,22 @@ public class ObjectiveModesMatchModule implements MatchModule, Listener {
         .build();
   }
 
-  public List<ModeChangeCountdown> getSortedCountdowns(boolean includeUnstarted) {
-    List<ModeChangeCountdown> listClone = new ArrayList<>(this.countdowns);
-    List<ModeChangeCountdown> unstartedCountdowns = new ArrayList<>();
-    // places countdowns triggered by filter at the bottom of list
-    for (ModeChangeCountdown listCloneItem : listClone) {
-      if (listCloneItem.getRemaining() == null) {
-        unstartedCountdowns.add(listCloneItem);
-        listClone.remove(listCloneItem);
-      }
-    }
-    Collections.sort(listClone);
-    if (includeUnstarted) {
-      listClone.addAll(unstartedCountdowns);
-    }
-
-    return listClone;
+  public List<ModeChangeCountdown> getSortedCountdowns(boolean includeAll) {
+    return this.countdowns.stream()
+        .filter(mcc -> includeAll || mcc.getRemaining() != null)
+        .sorted(MODE_COMPARATOR)
+        .collect(Collectors.toList());
   }
 
   public List<ModeChangeCountdown> getActiveCountdowns() {
-    List<ModeChangeCountdown> activeCountdowns =
-        new ArrayList<>(
-            Collections2.filter(
-                this.getAllCountdowns(),
-                new Predicate<ModeChangeCountdown>() {
-                  @Override
-                  public boolean apply(@Nullable ModeChangeCountdown countdown) {
-                    return ObjectiveModesMatchModule.this
-                            .getCountdown()
-                            .getTimeLeft(countdown)
-                            .getSeconds()
-                        > 0;
-                  }
-                }));
-    Collections.sort(activeCountdowns);
+    return getAllCountdowns().stream()
+        .filter(mcc -> mcc.getRemaining().getSeconds() > 0)
+        .sorted()
+        .collect(Collectors.toList());
+  }
 
-    return activeCountdowns;
+  public ModeChangeCountdown getCountdown(Mode mode) {
+    return this.countdowns.stream().filter(mcc -> mcc.getMode() == mode).findFirst().orElse(null);
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

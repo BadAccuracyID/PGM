@@ -1,13 +1,14 @@
 package tc.oc.pgm.start;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static net.kyori.adventure.text.Component.translatable;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import java.time.Duration;
-import javax.annotation.Nullable;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.jetbrains.annotations.Nullable;
+import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.teams.Team;
 import tc.oc.pgm.teams.TeamMatchModule;
@@ -27,7 +28,7 @@ public class StartCountdown extends PreMatchCountdown {
 
   public StartCountdown(Match match, boolean forced, Duration huddle) {
     super(match, BossBar.Color.GREEN);
-    this.huddle = checkNotNull(huddle);
+    this.huddle = assertNotNull(huddle);
     this.forced = forced;
     this.tmm = match.getModule(TeamMatchModule.class);
   }
@@ -72,7 +73,9 @@ public class StartCountdown extends PreMatchCountdown {
       for (Team team : this.tmm.getParticipatingTeams()) {
         if (team.isStacked()) {
           this.balanceWarningSent = true;
-          getMatch().sendWarning(translatable("match.balanceTeams", team.getName()));
+          if (isBalanceBroadcasted()) {
+            getMatch().sendWarning(translatable("match.balanceTeams", team.getName()));
+          }
         }
       }
 
@@ -97,5 +100,9 @@ public class StartCountdown extends PreMatchCountdown {
 
   public boolean isForced() {
     return forced;
+  }
+
+  private boolean isBalanceBroadcasted() {
+    return PGM.get().getConfiguration().shouldBalanceJoin();
   }
 }

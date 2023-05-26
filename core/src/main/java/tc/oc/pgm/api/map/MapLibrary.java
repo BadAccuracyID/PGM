@@ -2,7 +2,9 @@ package tc.oc.pgm.api.map;
 
 import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
-import javax.annotation.Nullable;
+import java.util.stream.Stream;
+import org.jetbrains.annotations.Nullable;
+import tc.oc.pgm.api.map.includes.MapIncludeProcessor;
 
 /** A library of {@link MapInfo}s and {@link MapContext}s. */
 public interface MapLibrary {
@@ -15,6 +17,13 @@ public interface MapLibrary {
    */
   @Nullable
   MapInfo getMap(String idOrName);
+
+  /**
+   * Get all {@link MapInfo}s matching the query.
+   *
+   * @return A stream of {@link MapInfo}s.
+   */
+  Stream<MapInfo> getMaps(String query);
 
   /**
    * Get all {@link MapInfo}s, without any duplicate ids or names.
@@ -45,4 +54,11 @@ public interface MapLibrary {
    * @return A {@link MapContext}.
    */
   CompletableFuture<MapContext> loadExistingMap(String id);
+
+  /**
+   * Get the {@link MapIncludeProcessor}.
+   *
+   * @return A {@link MapIncludeProcessor}
+   */
+  MapIncludeProcessor getIncludeProcessor();
 }

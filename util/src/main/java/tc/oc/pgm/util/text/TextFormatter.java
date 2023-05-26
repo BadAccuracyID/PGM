@@ -11,14 +11,15 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.ComponentLike;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.format.TextFormat;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.util.LegacyFormatUtils;
 import tc.oc.pgm.util.named.NameStyle;
 import tc.oc.pgm.util.named.Named;
@@ -130,18 +131,19 @@ public final class TextFormatter {
    * @return A formatted header
    */
   public static Component horizontalLineHeading(
-      CommandSender sender, Component text, TextColor lineColor, int width) {
+      CommandSender sender, ComponentLike text, TextColor lineColor, int width) {
     return horizontalLineHeading(sender, text, lineColor, TextDecoration.STRIKETHROUGH, width);
   }
 
   public static Component horizontalLineHeading(
       CommandSender sender,
-      Component text,
+      ComponentLike text,
       TextColor lineColor,
       TextDecoration decoration,
       int width) {
     text = text().append(space()).append(text).append(space()).build();
-    int textWidth = LegacyFormatUtils.pixelWidth(TextTranslations.translateLegacy(text, sender));
+    int textWidth =
+        LegacyFormatUtils.pixelWidth(TextTranslations.translateLegacy(text.asComponent(), sender));
     int spaceCount =
         Math.max(0, ((width - textWidth) / 2 + 1) / (LegacyFormatUtils.SPACE_PIXEL_WIDTH + 1));
     String line = Strings.repeat(" ", spaceCount);
@@ -153,7 +155,7 @@ public final class TextFormatter {
   }
 
   public static Component horizontalLineHeading(
-      CommandSender sender, Component text, TextColor lineColor) {
+      CommandSender sender, ComponentLike text, TextColor lineColor) {
     return horizontalLineHeading(sender, text, lineColor, LegacyFormatUtils.MAX_CHAT_WIDTH);
   }
 

@@ -1,12 +1,13 @@
 package tc.oc.pgm.core;
 
 import com.google.common.collect.ImmutableSet;
-import javax.annotation.Nullable;
 import org.bukkit.material.MaterialData;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.feature.FeatureInfo;
 import tc.oc.pgm.api.region.Region;
 import tc.oc.pgm.goals.ProximityGoalDefinition;
 import tc.oc.pgm.goals.ProximityMetric;
+import tc.oc.pgm.goals.ShowOptions;
 import tc.oc.pgm.modes.Mode;
 import tc.oc.pgm.teams.TeamFactory;
 
@@ -22,7 +23,7 @@ public class CoreFactory extends ProximityGoalDefinition {
       @Nullable String id,
       String name,
       @Nullable Boolean required,
-      boolean visible,
+      ShowOptions showOptions,
       TeamFactory owner,
       @Nullable ProximityMetric proximityMetric,
       Region region,
@@ -31,7 +32,7 @@ public class CoreFactory extends ProximityGoalDefinition {
       @Nullable ImmutableSet<Mode> modeList,
       boolean showProgress) {
 
-    super(id, name, required, visible, owner, proximityMetric);
+    super(id, name, required, showOptions, owner, proximityMetric);
     this.region = region;
     this.material = material;
     this.leakLevel = leakLevel;

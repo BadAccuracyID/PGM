@@ -1,6 +1,6 @@
 package tc.oc.pgm.goals;
 
-import javax.annotation.Nullable;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.teams.TeamFactory;
 
 public abstract class ProximityGoalDefinition extends OwnedGoalDefinition {
@@ -11,11 +11,11 @@ public abstract class ProximityGoalDefinition extends OwnedGoalDefinition {
       @Nullable String id,
       String name,
       @Nullable Boolean required,
-      boolean visible,
+      ShowOptions showOptions,
       TeamFactory owner,
       @Nullable ProximityMetric preTouchMetric,
       @Nullable ProximityMetric postTouchMetric) {
-    super(id, name, required, visible, owner);
+    super(id, name, required, showOptions, owner);
     this.preTouchMetric = preTouchMetric;
     this.postTouchMetric = postTouchMetric;
   }
@@ -24,10 +24,10 @@ public abstract class ProximityGoalDefinition extends OwnedGoalDefinition {
       @Nullable String id,
       String name,
       @Nullable Boolean required,
-      boolean visible,
+      ShowOptions showOptions,
       TeamFactory owner,
       @Nullable ProximityMetric preTouchMetric) {
-    this(id, name, required, visible, owner, preTouchMetric, null);
+    this(id, name, required, showOptions, owner, preTouchMetric, null);
   }
 
   public @Nullable ProximityMetric getPreTouchMetric() {

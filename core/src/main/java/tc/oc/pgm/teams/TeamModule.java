@@ -7,12 +7,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 import org.bukkit.ChatColor;
+import org.bukkit.DyeColor;
 import org.bukkit.scoreboard.NameTagVisibility;
 import org.jdom2.Attribute;
 import org.jdom2.Document;
 import org.jdom2.Element;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.map.MapModule;
 import tc.oc.pgm.api.map.MapTag;
 import tc.oc.pgm.api.map.factory.MapFactory;
@@ -40,19 +41,16 @@ public class TeamModule implements MapModule<TeamMatchModule> {
 
   @Override
   public Collection<MapTag> getTags() {
-    final int id = teams.size();
-    Collection<MapTag> tags = TAGS.get(id);
-    if (tags == null) {
-      tags =
-          ImmutableList.of(
-              new MapTag(
-                  id + "team" + (id == 1 ? "" : "s"),
-                  id + " Team" + (id == 1 ? "" : "s"),
-                  false,
-                  true));
-      TAGS.put(id, tags);
-    }
-    return tags;
+    final int size = teams.size();
+    return TAGS.computeIfAbsent(
+        size,
+        s ->
+            ImmutableList.of(
+                new MapTag(
+                    size + "team" + (size == 1 ? "" : "s"),
+                    size + " Team" + (size == 1 ? "" : "s"),
+                    false,
+                    true)));
   }
 
   @Override
@@ -94,7 +92,7 @@ public class TeamModule implements MapModule<TeamMatchModule> {
   }
 
   public TeamFactory getTeamByName(String name) {
-    return StringUtils.bestFuzzyMatch(name, getTeams(), 0.9);
+    return StringUtils.bestFuzzyMatch(name, getTeams());
   }
 
   // ---------------------
@@ -120,7 +118,7 @@ public class TeamModule implements MapModule<TeamMatchModule> {
     boolean plural = XMLUtils.parseBoolean(el.getAttribute("plural"), false);
 
     ChatColor color = XMLUtils.parseChatColor(Node.fromAttr(el, "color"), ChatColor.WHITE);
-    ChatColor overheadColor = XMLUtils.parseChatColor(Node.fromAttr(el, "overhead-color"), null);
+    DyeColor dyeColor = XMLUtils.parseDyeColor(el.getAttribute("dye-color"), null);
     NameTagVisibility nameTagVisibility =
         XMLUtils.parseNameTagVisibility(
             Node.fromAttr(el, "show-name-tags"), NameTagVisibility.ALWAYS);
@@ -141,7 +139,7 @@ public class TeamModule implements MapModule<TeamMatchModule> {
             name,
             plural,
             color,
-            overheadColor,
+            dyeColor,
             minPlayers,
             maxPlayers,
             maxOverfill,

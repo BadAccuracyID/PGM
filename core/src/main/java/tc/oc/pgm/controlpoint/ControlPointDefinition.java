@@ -1,12 +1,14 @@
 package tc.oc.pgm.controlpoint;
 
 import java.time.Duration;
-import javax.annotation.Nullable;
 import org.bukkit.util.BlockVector;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.feature.FeatureInfo;
 import tc.oc.pgm.api.filter.Filter;
+import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.region.Region;
 import tc.oc.pgm.goals.GoalDefinition;
+import tc.oc.pgm.goals.ShowOptions;
 import tc.oc.pgm.teams.TeamFactory;
 
 /**
@@ -40,6 +42,9 @@ public class ControlPointDefinition extends GoalDefinition {
 
   // Time it takes for a point to decay while unowned. (Time is accurate when near 100% capture)
   private final double decayRate;
+
+  // Time it takes for a point to decay while contested. (Time is accurate when near 100% capture)
+  private final double contestedRate;
 
   // Time it takes for a point to recover to captured state. (Accurate when almost uncaptured)
   private final double recoveryRate;
@@ -88,7 +93,7 @@ public class ControlPointDefinition extends GoalDefinition {
       @Nullable String id,
       String name,
       @Nullable Boolean required,
-      boolean visible,
+      ShowOptions showOptions,
       Region captureRegion,
       Filter captureFilter,
       Filter playerFilter,
@@ -100,6 +105,7 @@ public class ControlPointDefinition extends GoalDefinition {
       double decayRate,
       double recoveryRate,
       double ownedDecayRate,
+      double contestedRate,
       float timeMultiplier,
       @Nullable TeamFactory initialOwner,
       CaptureCondition captureCondition,
@@ -110,7 +116,7 @@ public class ControlPointDefinition extends GoalDefinition {
       float pointsGrowth,
       boolean progress) {
 
-    super(id, name, required, visible);
+    super(id, name, required, showOptions);
     this.captureRegion = captureRegion;
     this.captureFilter = captureFilter;
     this.playerFilter = playerFilter;
@@ -122,6 +128,7 @@ public class ControlPointDefinition extends GoalDefinition {
     this.decayRate = decayRate;
     this.recoveryRate = recoveryRate;
     this.ownedDecayRate = ownedDecayRate;
+    this.contestedRate = contestedRate;
     this.timeMultiplier = timeMultiplier;
     this.initialOwner = initialOwner;
     this.captureCondition = captureCondition;
@@ -131,6 +138,10 @@ public class ControlPointDefinition extends GoalDefinition {
     this.pointsOwner = pointsOwner;
     this.pointsGrowth = pointsGrowth;
     this.showProgress = progress;
+  }
+
+  public ControlPoint build(Match match) {
+    return new ControlPoint(match, this);
   }
 
   @Override
@@ -147,6 +158,8 @@ public class ControlPointDefinition extends GoalDefinition {
         + this.getRecoveryRate()
         + " ownedDecayRate="
         + this.getOwnedDecayRate()
+        + " contestedRate="
+        + this.getContestedRate()
         + " timeMultiplier="
         + this.getTimeMultiplier()
         + " initialOwner="
@@ -169,8 +182,8 @@ public class ControlPointDefinition extends GoalDefinition {
         + this.getControllerDisplayRegion()
         + " beacon="
         + this.getCapturableDisplayBeacon()
-        + " visible="
-        + this.isVisible();
+        + " options="
+        + this.getShowOptions();
   }
 
   public Region getCaptureRegion() {
@@ -215,6 +228,10 @@ public class ControlPointDefinition extends GoalDefinition {
 
   public double getOwnedDecayRate() {
     return this.ownedDecayRate;
+  }
+
+  public double getContestedRate() {
+    return this.contestedRate;
   }
 
   public float getTimeMultiplier() {

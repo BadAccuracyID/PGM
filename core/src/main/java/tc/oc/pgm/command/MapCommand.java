@@ -1,29 +1,26 @@
 package tc.oc.pgm.command;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static net.kyori.adventure.text.Component.empty;
 import static net.kyori.adventure.text.Component.space;
 import static net.kyori.adventure.text.Component.text;
 import static net.kyori.adventure.text.Component.translatable;
 import static net.kyori.adventure.text.event.ClickEvent.runCommand;
 import static net.kyori.adventure.text.event.HoverEvent.showText;
-import static tc.oc.pgm.util.text.TextException.invalidFormat;
+import static tc.oc.pgm.command.util.ParserConstants.CURRENT;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
-import app.ashcon.intake.Command;
-import app.ashcon.intake.CommandException;
-import app.ashcon.intake.bukkit.parametric.Type;
-import app.ashcon.intake.bukkit.parametric.annotation.Fallback;
-import app.ashcon.intake.parametric.annotation.Default;
-import app.ashcon.intake.parametric.annotation.Switch;
-import app.ashcon.intake.parametric.annotation.Text;
-import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.collect.Sets;
+import cloud.commandframework.annotations.Argument;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
+import cloud.commandframework.annotations.Flag;
+import cloud.commandframework.annotations.specifier.Greedy;
+import cloud.commandframework.annotations.specifier.Range;
+import com.google.common.collect.ImmutableList;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent.Builder;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -36,10 +33,11 @@ import tc.oc.pgm.api.map.MapInfo;
 import tc.oc.pgm.api.map.MapLibrary;
 import tc.oc.pgm.api.map.MapTag;
 import tc.oc.pgm.api.map.Phase;
-import tc.oc.pgm.rotation.MapPool;
 import tc.oc.pgm.rotation.MapPoolManager;
+import tc.oc.pgm.rotation.pools.MapPool;
 import tc.oc.pgm.util.Audience;
 import tc.oc.pgm.util.PrettyPaginatedComponentResults;
+import tc.oc.pgm.util.StringUtils;
 import tc.oc.pgm.util.named.MapNameStyle;
 import tc.oc.pgm.util.named.NameStyle;
 import tc.oc.pgm.util.text.TextFormatter;
@@ -47,24 +45,22 @@ import tc.oc.pgm.util.text.TextTranslations;
 
 public final class MapCommand {
 
-  @Command(
-      aliases = {"maps", "maplist", "ml"},
-      desc = "List all maps loaded",
-      usage = "[-a <author>] [-t <tag1>,<tag2>] [-n <name>]")
+  @CommandMethod("maps|maplist|ml [page]")
+  @CommandDescription("List all maps loaded")
   public void maps(
       Audience audience,
       CommandSender sender,
       MapLibrary library,
-      @Default("1") Integer page,
-      @Fallback(Type.NULL) @Switch('t') String tags,
-      @Fallback(Type.NULL) @Switch('a') String author,
-      @Fallback(Type.NULL) @Switch('n') String name,
-      @Fallback(Type.NULL) @Switch('p') String phaseType)
-      throws CommandException {
-    Stream<MapInfo> search = Sets.newHashSet(library.getMaps()).stream();
-    if (tags != null) {
+      @Argument(value = "page", defaultValue = "1") @Range(min = "1") int page,
+      @Flag(value = "tags", aliases = "t", repeatable = true) List<String> tags,
+      @Flag(value = "author", aliases = "a") String author,
+      @Flag(value = "name", aliases = "n") String name,
+      @Flag(value = "phase", aliases = "p") Phase phase) {
+    Stream<MapInfo> search = library.getMaps(name);
+    if (!tags.isEmpty()) {
       final Map<Boolean, Set<String>> tagSet =
-          Stream.of(tags.split(","))
+          tags.stream()
+              .flatMap(t -> Arrays.stream(t.split(",")))
               .map(String::toLowerCase)
               .map(String::trim)
               .collect(
@@ -77,17 +73,13 @@ public final class MapCommand {
     }
 
     if (author != null) {
-      search = search.filter(map -> matchesAuthor(map, author));
+      String query = StringUtils.normalize(author);
+      search = search.filter(map -> matchesAuthor(map, query));
     }
 
-    if (name != null) {
-      search = search.filter(map -> matchesName(map, name));
-    }
-
-    Phase phase = phaseType == null ? Phase.PRODUCTION : Phase.of(phaseType);
-    if (phase == null) throw invalidFormat(phaseType, Phase.class, null);
-
-    search = search.filter(map -> map.getPhase() == phase);
+    // FIXME: change when cloud gets support for default flag values
+    final Phase finalPhase = phase == null ? Phase.PRODUCTION : phase;
+    search = search.filter(map -> map.getPhase() == finalPhase);
 
     Set<MapInfo> maps = search.collect(Collectors.toCollection(TreeSet::new));
     int resultsPerPage = 8;
@@ -120,13 +112,13 @@ public final class MapCommand {
                     .clickEvent(runCommand("/map " + map.getName())))
             .build();
       }
-    }.display(audience, ImmutableSortedSet.copyOf(maps), page);
+    }.display(audience, ImmutableList.copyOf(maps), page);
   }
 
   private static boolean matchesTags(
-      MapInfo map, @Nullable Collection<String> posTags, @Nullable Collection<String> negTags) {
+      MapInfo map, Collection<String> posTags, Collection<String> negTags) {
     int matches = 0;
-    for (MapTag tag : checkNotNull(map).getTags()) {
+    for (MapTag tag : assertNotNull(map).getTags()) {
       if (negTags != null && negTags.contains(tag.getId())) {
         return false;
       }
@@ -138,34 +130,20 @@ public final class MapCommand {
   }
 
   private static boolean matchesAuthor(MapInfo map, String query) {
-    checkNotNull(map);
-    query = checkNotNull(query).toLowerCase();
-
     for (Contributor contributor : map.getAuthors()) {
-      if (contributor.getNameLegacy().toLowerCase().contains(query)) {
+      if (StringUtils.normalize(contributor.getNameLegacy()).contains(query)) {
         return true;
       }
     }
     return false;
   }
 
-  private static boolean matchesName(MapInfo map, String query) {
-    checkNotNull(map);
-    query = checkNotNull(query).toLowerCase();
-    return map.getName().toLowerCase().contains(query);
-  }
-
-  private static boolean matchesPhase(MapInfo map, String query) {
-    checkNotNull(map);
-    query = checkNotNull(query).toLowerCase();
-    return map.getPhase().equals(Phase.of(query));
-  }
-
-  @Command(
-      aliases = {"map", "mapinfo"},
-      desc = "Show info about a map",
-      usage = "[map name] - defaults to the current map")
-  public void map(Audience audience, CommandSender sender, @Text MapInfo map) {
+  @CommandMethod("map|mapinfo [map]")
+  @CommandDescription("Show info about a map")
+  public void map(
+      Audience audience,
+      CommandSender sender,
+      @Argument(value = "map", defaultValue = CURRENT) @Greedy MapInfo map) {
     audience.sendMessage(
         TextFormatter.horizontalLineHeading(
             sender,
@@ -253,10 +231,10 @@ public final class MapCommand {
     if (PGM.get().getMapOrder() instanceof MapPoolManager) {
       String mapPools =
           ((MapPoolManager) PGM.get().getMapOrder())
-              .getMapPools().stream()
-                  .filter(pool -> pool.getMaps().contains(map))
-                  .map(MapPool::getName)
-                  .collect(Collectors.joining(", "));
+              .getMapPoolStream()
+              .filter(pool -> pool.getMaps().contains(map))
+              .map(MapPool::getName)
+              .collect(Collectors.joining(", "));
       if (!mapPools.isEmpty()) {
         audience.sendMessage(
             text()
@@ -270,7 +248,7 @@ public final class MapCommand {
   }
 
   private Component createTagsComponent(Collection<MapTag> tags) {
-    checkNotNull(tags);
+    assertNotNull(tags);
 
     Builder result = text().append(mapInfoLabel("map.info.tags"));
     MapTag[] mapTags = tags.toArray(new MapTag[0]);
@@ -300,8 +278,8 @@ public final class MapCommand {
   }
 
   private static Component createPlayerLimitComponent(CommandSender sender, MapInfo map) {
-    checkNotNull(sender);
-    checkNotNull(map);
+    assertNotNull(sender);
+    assertNotNull(map);
 
     Collection<Integer> maxPlayers = map.getMaxPlayers();
     if (maxPlayers.isEmpty()) {

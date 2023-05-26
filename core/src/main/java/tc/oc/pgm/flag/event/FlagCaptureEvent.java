@@ -1,23 +1,23 @@
 package tc.oc.pgm.flag.event;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import org.bukkit.event.HandlerList;
 import tc.oc.pgm.api.party.Competitor;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.flag.Flag;
 import tc.oc.pgm.flag.FlagDefinition;
-import tc.oc.pgm.flag.Net;
+import tc.oc.pgm.flag.NetDefinition;
 import tc.oc.pgm.goals.events.GoalCompleteEvent;
 
 public class FlagCaptureEvent extends GoalCompleteEvent {
 
-  private final Net net;
+  private final NetDefinition net;
   private final MatchPlayer carrier;
   private final boolean allFlagsCaptured;
 
-  public FlagCaptureEvent(Flag flag, MatchPlayer carrier, Net net) {
-    super(flag.getMatch(), flag, (Competitor) checkNotNull(carrier).getParty(), true);
+  public FlagCaptureEvent(Flag flag, MatchPlayer carrier, NetDefinition net) {
+    super(flag.getMatch(), flag, (Competitor) assertNotNull(carrier).getParty(), true);
     this.net = net;
     this.carrier = carrier;
 
@@ -33,7 +33,7 @@ public class FlagCaptureEvent extends GoalCompleteEvent {
     return (Flag) super.getGoal();
   }
 
-  public Net getNet() {
+  public NetDefinition getNet() {
     return net;
   }
 

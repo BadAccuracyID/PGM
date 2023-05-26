@@ -3,71 +3,67 @@ package tc.oc.pgm.command;
 import static net.kyori.adventure.text.Component.empty;
 import static net.kyori.adventure.text.Component.text;
 import static net.kyori.adventure.text.Component.translatable;
+import static net.kyori.adventure.text.event.HoverEvent.showText;
+import static tc.oc.pgm.util.text.TextException.exception;
 
-import app.ashcon.intake.Command;
-import app.ashcon.intake.CommandException;
-import app.ashcon.intake.parametric.annotation.Default;
-import app.ashcon.intake.parametric.annotation.Switch;
-import app.ashcon.intake.parametric.annotation.Text;
+import cloud.commandframework.annotations.Argument;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
+import cloud.commandframework.annotations.CommandPermission;
+import cloud.commandframework.annotations.Flag;
+import cloud.commandframework.annotations.injection.RawArgs;
+import cloud.commandframework.annotations.specifier.FlagYielding;
+import cloud.commandframework.annotations.specifier.Range;
 import java.text.DecimalFormat;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
+import java.util.stream.Stream;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 import tc.oc.pgm.api.Permissions;
 import tc.oc.pgm.api.map.MapInfo;
-import tc.oc.pgm.api.map.MapOrder;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.cycle.CycleCountdown;
-import tc.oc.pgm.rotation.MapPoll;
-import tc.oc.pgm.rotation.MapPool;
 import tc.oc.pgm.rotation.MapPoolManager;
-import tc.oc.pgm.rotation.Rotation;
-import tc.oc.pgm.rotation.VotingPool;
+import tc.oc.pgm.rotation.pools.MapPool;
+import tc.oc.pgm.rotation.pools.MapPoolType;
+import tc.oc.pgm.rotation.pools.Rotation;
+import tc.oc.pgm.rotation.pools.VotingPool;
+import tc.oc.pgm.rotation.vote.MapPoll;
 import tc.oc.pgm.util.Audience;
 import tc.oc.pgm.util.PrettyPaginatedComponentResults;
 import tc.oc.pgm.util.named.MapNameStyle;
+import tc.oc.pgm.util.text.TextException;
 import tc.oc.pgm.util.text.TextFormatter;
-import tc.oc.pgm.util.text.TextTranslations;
 
 public final class MapPoolCommand {
 
   private static final DecimalFormat SCORE_FORMAT = new DecimalFormat("00.00%");
 
-  @Command(
-      aliases = {"pool", "rotation", "rot"},
-      desc = "List the maps in the map pool",
-      usage = "[page] [-p pool] [-s scores] [-c chance of vote]")
-  public static void pool(
-      Audience audience,
-      CommandSender sender,
-      MapOrder mapOrder,
-      @Default("1") int page,
-      @Switch('r') String rotationName,
-      @Switch('p') String poolName,
-      @Switch('s') boolean scores,
-      @Switch('c') boolean chance)
-      throws CommandException {
-    if (rotationName != null) poolName = rotationName;
+  @CommandMethod("pool [page]")
+  @CommandDescription("List the maps in the map pool")
+  public void pool(
+      Audience sender,
+      CommandSender source,
+      MapPoolManager poolManager,
+      @Argument(value = "page", defaultValue = "1") @Range(min = "1") int page,
+      @Flag(value = "type", aliases = "t") MapPoolType type,
+      @Flag(value = "pool", aliases = "p") MapPool mapPool,
+      @Flag(value = "score", aliases = "s") boolean scores,
+      @Flag(value = "chance", aliases = "c") boolean chance) {
+    // Default to current pool
+    if (mapPool == null) mapPool = poolManager.getActiveMapPool();
 
-    MapPoolManager mapPoolManager = getMapPoolManager(sender, mapOrder);
-    MapPool mapPool =
-        poolName == null
-            ? mapPoolManager.getActiveMapPool()
-            : mapPoolManager.getMapPoolByName(poolName);
-
-    if (mapPool == null) {
-      audience.sendWarning(translatable("pool.noPoolMatch"));
-      return;
-    }
+    if (mapPool == null || (type != null && mapPool.getType() != type))
+      throw exception("pool.noPoolMatch");
     List<MapInfo> maps = mapPool.getMaps();
 
     int resultsPerPage = 8;
@@ -88,7 +84,7 @@ public final class MapPoolCommand {
             false);
 
     Component title =
-        TextFormatter.horizontalLineHeading(sender, mapPoolComponent, NamedTextColor.BLUE, 250);
+        TextFormatter.horizontalLineHeading(source, mapPoolComponent, NamedTextColor.BLUE, 250);
 
     VotingPool votes =
         (scores || chance) && mapPool instanceof VotingPool ? (VotingPool) mapPool : null;
@@ -96,7 +92,7 @@ public final class MapPoolCommand {
     if (chance && votes != null) {
       double maxWeight = 0, currWeight;
       for (MapInfo map : votes.getMaps()) {
-        chances.put(map, currWeight = MapPoll.getWeight(votes.getMapScore(map)));
+        chances.put(map, currWeight = votes.mapPicker.getWeight(null, map, votes.getMapScore(map)));
         maxWeight += currWeight;
       }
       double finalMaxWeight = maxWeight;
@@ -123,32 +119,27 @@ public final class MapPoolCommand {
         entry.append(map.getStyledName(MapNameStyle.COLOR_WITH_AUTHORS));
         return entry.build();
       }
-    }.display(audience, maps, page);
+    }.display(sender, maps, page);
   }
 
-  @Command(
-      aliases = {"pools", "rotations", "rots"},
-      desc = "List all the map pools",
-      flags = "d")
-  public static void pools(
-      Audience audience,
-      CommandSender sender,
-      MapOrder mapOrder,
-      @Default("1") int page,
-      @Switch('d') boolean dynamicOnly)
-      throws CommandException {
+  @CommandMethod("pools [page]")
+  @CommandDescription("List all the map pools")
+  public void pools(
+      Audience sender,
+      CommandSender source,
+      MapPoolManager poolManager,
+      @Argument(value = "page", defaultValue = "1") @Range(min = "1") int page,
+      @Flag(value = "type", aliases = "t") MapPoolType type,
+      @Flag(value = "dynamic", aliases = "d") boolean dynamicOnly) {
 
-    MapPoolManager mapPoolManager = getMapPoolManager(sender, mapOrder);
+    if (poolManager.getPoolSize() <= 0) throw exception("pool.noMapPools");
 
-    List<MapPool> mapPools = mapPoolManager.getMapPools();
-    if (mapPools.isEmpty()) {
-      audience.sendWarning(translatable("pool.noMapPools"));
-      return;
-    }
+    Stream<MapPool> poolStream = poolManager.getMapPoolStream();
+    if (dynamicOnly) poolStream = poolStream.filter(MapPool::isDynamic);
+    if (type != null) poolStream = poolStream.filter(mp -> mp.getType() == type);
 
-    if (dynamicOnly) {
-      mapPools = mapPools.stream().filter(MapPool::isDynamic).collect(Collectors.toList());
-    }
+    List<MapPool> mapPools = poolStream.collect(Collectors.toList());
+    if (mapPools.isEmpty()) throw exception("pool.noPoolMatch");
 
     int resultsPerPage = 8;
     int pages = (mapPools.size() + resultsPerPage - 1) / resultsPerPage;
@@ -163,7 +154,7 @@ public final class MapPoolCommand {
             true);
 
     Component formattedTitle =
-        TextFormatter.horizontalLineHeading(sender, paginated, NamedTextColor.BLUE, 250);
+        TextFormatter.horizontalLineHeading(source, paginated, NamedTextColor.BLUE);
 
     new PrettyPaginatedComponentResults<MapPool>(formattedTitle, resultsPerPage) {
       @Override
@@ -171,7 +162,7 @@ public final class MapPoolCommand {
         Component arrow =
             text(
                 "» ",
-                mapPoolManager.getActiveMapPool().getName().equals(mapPool.getName())
+                poolManager.getActiveMapPool().equals(mapPool)
                     ? NamedTextColor.GREEN
                     : NamedTextColor.WHITE);
 
@@ -200,71 +191,68 @@ public final class MapPoolCommand {
             .append(mapPool.isDynamic() ? players : empty())
             .build();
       }
-    }.display(audience, mapPools, page);
+    }.display(sender, mapPools, page);
   }
 
-  @Command(
-      aliases = {"setpool", "setrot"},
-      desc = "Change the map pool",
-      usage = "[pool name] -r (revert to dynamic) -t (time limit for map pool) -m (match # limit)",
-      flags = "rtm",
-      perms = Permissions.SETNEXT)
+  @CommandMethod("setpool <pool>")
+  @CommandDescription("Change the map pool")
+  @CommandPermission(Permissions.SETNEXT)
   public void setPool(
       Audience sender,
       CommandSender source,
       Match match,
-      MapOrder mapOrder,
-      @Nullable String poolName,
-      @Switch('r') boolean reset,
-      @Switch('t') Duration timeLimit,
-      @Switch('m') Integer matchLimit)
-      throws CommandException {
-    if (!match.getCountdown().getAll(CycleCountdown.class).isEmpty()) {
-      sender.sendMessage(translatable("admin.setPool.activeCycle", NamedTextColor.RED));
+      MapPoolManager poolManager,
+      @Argument("pool") MapPool newPool,
+      @Flag(value = "timelimit", aliases = "t") Duration timeLimit,
+      @Flag(value = "matches", aliases = "m") Integer matchLimit) {
+    if (!match.getCountdown().getAll(CycleCountdown.class).isEmpty())
+      throw exception("admin.setPool.activeCycle");
+
+    if (newPool == null) throw exception("pool.noPoolMatch");
+
+    if (newPool.equals(poolManager.getActiveMapPool())) {
+      sender.sendMessage(
+          translatable(
+              "pool.matching",
+              NamedTextColor.GRAY,
+              text(newPool.getName(), NamedTextColor.LIGHT_PURPLE)));
       return;
     }
-    MapPoolManager mapPoolManager = getMapPoolManager(source, mapOrder);
-    MapPool newPool =
-        reset
-            ? mapPoolManager.getAppropriateDynamicPool(match).orElse(null)
-            : mapPoolManager.getMapPoolByName(poolName);
 
-    if (newPool == null) {
-      sender.sendWarning(translatable(reset ? "pool.noDynamic" : "pool.noPoolMatch"));
-    } else {
-      if (newPool.equals(mapPoolManager.getActiveMapPool())) {
-        sender.sendMessage(
-            translatable(
-                "pool.matching",
-                NamedTextColor.GRAY,
-                text(newPool.getName(), NamedTextColor.LIGHT_PURPLE)));
-        return;
-      }
-
-      mapPoolManager.updateActiveMapPool(
-          newPool, match, true, source, timeLimit, matchLimit != null ? matchLimit : 0);
-    }
+    poolManager.updateActiveMapPool(
+        newPool, match, true, source, timeLimit, matchLimit != null ? matchLimit : 0);
   }
 
-  @Command(
-      aliases = {"skip"},
-      desc = "Skip the next map",
-      usage = "[positions]",
-      perms = Permissions.SETNEXT)
-  public static void skip(
-      Audience viewer, CommandSender sender, MapOrder mapOrder, @Default("1") int positions)
-      throws CommandException {
+  @CommandMethod("setpool reset")
+  @CommandDescription("Reset the pool back to appropriate default dynamic pool")
+  @CommandPermission(Permissions.SETNEXT)
+  public void resetPool(
+      Audience sender,
+      CommandSender source,
+      Match match,
+      MapPoolManager poolManager,
+      @Flag(value = "timelimit", aliases = "t") Duration timeLimit,
+      @Flag(value = "matches", aliases = "m") Integer matchLimit) {
+    setPool(
+        sender,
+        source,
+        match,
+        poolManager,
+        poolManager.getAppropriateDynamicPool(match).orElseThrow(() -> exception("pool.noDynamic")),
+        timeLimit,
+        matchLimit);
+  }
 
-    if (positions < 0) {
-      viewer.sendWarning(translatable("pool.skip.negative"));
-      return;
-    }
+  @CommandMethod("skip [positions]")
+  @CommandDescription("Skip the next map")
+  @CommandPermission(Permissions.SETNEXT)
+  public void skip(
+      Audience sender,
+      MapPoolManager poolManager,
+      @Argument(value = "positions", defaultValue = "1") @Range(min = "1") int positions) {
 
-    MapPool pool = getMapPoolManager(sender, mapOrder).getActiveMapPool();
-    if (!(pool instanceof Rotation)) {
-      viewer.sendWarning(translatable("pool.noRotation"));
-      return;
-    }
+    MapPool pool = poolManager.getActiveMapPool();
+    if (!(pool instanceof Rotation)) throw exception("pool.noRotation");
 
     ((Rotation) pool).advance(positions);
 
@@ -280,53 +268,137 @@ public final class MapPoolCommand {
                     "pool.skip", NamedTextColor.GREEN, text(positions, NamedTextColor.AQUA)))
             .build();
 
-    viewer.sendMessage(message);
+    sender.sendMessage(message);
   }
 
-  @Command(aliases = "votenext", desc = "Vote for the next map", usage = "map")
-  public static void voteNext(
+  @CommandMethod("votenext [map]")
+  @CommandDescription("Vote for the next map")
+  public void voteNext(
       MatchPlayer player,
-      CommandSender sender,
-      MapOrder mapOrder,
-      @Switch('o') boolean forceOpen,
-      @Text MapInfo map)
-      throws CommandException {
-    MapPoll poll = getVotingPool(player, sender, mapOrder);
-    if (poll != null) {
-      boolean voteResult = poll.toggleVote(map, ((Player) sender).getUniqueId());
-      Component voteAction =
-          translatable(
-              voteResult ? "vote.for" : "vote.abstain",
-              voteResult ? NamedTextColor.GREEN : NamedTextColor.RED,
-              map.getStyledName(MapNameStyle.COLOR));
-      player.sendMessage(voteAction);
-      poll.sendBook(player, forceOpen);
+      MapPoll poll,
+      @Flag(value = "open", aliases = "o") boolean forceOpen,
+      @Argument("map") @FlagYielding MapInfo map) {
+    boolean voteResult = poll.toggleVote(map, player);
+    Component voteAction =
+        translatable(
+            voteResult ? "vote.for" : "vote.abstain",
+            voteResult ? NamedTextColor.GREEN : NamedTextColor.RED,
+            map.getStyledName(MapNameStyle.COLOR));
+    player.sendMessage(voteAction);
+    poll.sendBook(player, forceOpen);
+  }
+
+  @CommandMethod("votebook")
+  @CommandDescription("Spawn a vote book")
+  public void voteBook(MatchPlayer player, MapPoll poll) {
+    poll.sendBook(player, false);
+  }
+
+  // Legacy rotation command aliases
+
+  @CommandMethod("rot [page]")
+  @CommandDescription("List the maps in the rotation. Use /pool to see unfiltered results.")
+  @RawArgs
+  public void rot(
+      Audience sender,
+      CommandSender source,
+      MapPoolManager poolManager,
+      @Argument(value = "page", defaultValue = "1") @Range(min = "1") int page,
+      @Flag(value = "score", aliases = "s") boolean scores,
+      @Flag(value = "chance", aliases = "c") boolean chance,
+      String[] rawArgs) {
+    wrapLegacy(
+        "pool",
+        sender,
+        rawArgs,
+        () -> {
+          if (poolManager.getActiveMapPool().getType() != MapPoolType.ORDERED)
+            throw exception("pool.noRotation");
+
+          pool(sender, source, poolManager, page, MapPoolType.ORDERED, null, scores, chance);
+        });
+  }
+
+  @CommandMethod("rots [page]")
+  @CommandDescription("List all the rotations. Use /pools to see unfiltered results.")
+  @RawArgs
+  public void rots(
+      Audience sender,
+      CommandSender source,
+      MapPoolManager poolManager,
+      @Argument(value = "page", defaultValue = "1") @Range(min = "1") int page,
+      String[] rawArgs) {
+    pools(sender, source, poolManager, page, MapPoolType.ORDERED, false);
+    // Always follow-up, as they're filtered results that may not error out
+    sender.sendMessage(alternativeUsage(rawArgs, "pools"));
+  }
+
+  @CommandMethod("setrot <rotation>")
+  @CommandDescription("Set a rotation as current pool. Use /setpool to set other types of pools.")
+  @CommandPermission(Permissions.SETNEXT)
+  @RawArgs
+  public void setRot(
+      Audience sender,
+      CommandSender source,
+      Match match,
+      MapPoolManager poolManager,
+      @Argument("rotation") Rotation rotation,
+      @Flag(value = "timelimit", aliases = "t") Duration timeLimit,
+      @Flag(value = "matches", aliases = "m") Integer matchLimit,
+      String[] rawArgs) {
+    wrapLegacy(
+        "setpool",
+        sender,
+        rawArgs,
+        () -> setPool(sender, source, match, poolManager, rotation, timeLimit, matchLimit));
+  }
+
+  @CommandMethod("setrot reset")
+  @CommandDescription(
+      "Reset the rotation to default. Use /setpool to reset to other types of pools.")
+  @CommandPermission(Permissions.SETNEXT)
+  @RawArgs
+  public void resetRot(
+      Audience sender,
+      CommandSender source,
+      Match match,
+      MapPoolManager poolManager,
+      @Flag(value = "timelimit", aliases = "t") Duration timeLimit,
+      @Flag(value = "matches", aliases = "m") Integer matchLimit,
+      String[] rawArgs) {
+
+    MapPool resetRot =
+        poolManager.getAppropriateDynamicPool(match).orElseThrow(() -> exception("pool.noDynamic"));
+
+    wrapLegacy(
+        "setpool",
+        sender,
+        rawArgs,
+        () -> {
+          if (resetRot.getType() != MapPoolType.ORDERED) throw exception("pool.noRotation");
+          setPool(sender, source, match, poolManager, resetRot, timeLimit, matchLimit);
+        });
+  }
+
+  private void wrapLegacy(String replace, Audience sender, String[] rawArgs, Runnable task) {
+    try {
+      task.run();
+    } catch (TextException e) {
+      sender.sendWarning(e.componentMessage());
+      throw alternativeUsage(rawArgs, replace);
     }
   }
 
-  @Command(aliases = "votebook", desc = "Spawn a vote book")
-  public void voteBook(MatchPlayer player, CommandSender sender, MapOrder mapOrder)
-      throws CommandException {
-    MapPoll poll = getVotingPool(player, sender, mapOrder);
-    if (poll != null) {
-      poll.sendBook(player, false);
-    }
-  }
+  private TextException alternativeUsage(String[] rawArgs, String replace) {
+    rawArgs[0] = "/" + replace;
+    String altCommand = String.join(" ", rawArgs);
+    Component cmd =
+        text(altCommand).color(NamedTextColor.YELLOW).decorate(TextDecoration.UNDERLINED);
 
-  private static MapPoll getVotingPool(MatchPlayer player, CommandSender sender, MapOrder mapOrder)
-      throws CommandException {
-    MapPool pool = getMapPoolManager(sender, mapOrder).getActiveMapPool();
-    MapPoll poll = pool instanceof VotingPool ? ((VotingPool) pool).getCurrentPoll() : null;
-    if (poll == null) {
-      player.sendWarning(translatable("vote.noVote"));
-    }
-    return poll;
-  }
-
-  public static MapPoolManager getMapPoolManager(CommandSender sender, MapOrder mapOrder)
-      throws CommandException {
-    if (mapOrder instanceof MapPoolManager) return (MapPoolManager) mapOrder;
-
-    throw new CommandException(TextTranslations.translate("pool.mapPoolsDisabled", sender));
+    return exception(
+        "command.alternativeUsage",
+        cmd.hoverEvent(
+                showText(translatable("command.clickToRun", cmd).color(NamedTextColor.GREEN)))
+            .clickEvent(ClickEvent.runCommand(altCommand)));
   }
 }

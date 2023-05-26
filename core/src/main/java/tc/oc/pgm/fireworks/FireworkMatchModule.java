@@ -1,6 +1,8 @@
 package tc.oc.pgm.fireworks;
 
-import com.google.common.base.Preconditions;
+import static tc.oc.pgm.util.Assert.assertNotNull;
+import static tc.oc.pgm.util.Assert.assertTrue;
+
 import com.google.common.collect.ImmutableList;
 import java.util.Collection;
 import java.util.Collections;
@@ -16,6 +18,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Firework;
 import org.bukkit.event.EventHandler;
@@ -35,6 +38,7 @@ import tc.oc.pgm.core.CoreLeakEvent;
 import tc.oc.pgm.destroyable.DestroyableDestroyedEvent;
 import tc.oc.pgm.events.ListenerScope;
 import tc.oc.pgm.flag.event.FlagCaptureEvent;
+import tc.oc.pgm.goals.ShowOption;
 import tc.oc.pgm.regions.Bounds;
 import tc.oc.pgm.util.block.BlockVectors;
 import tc.oc.pgm.util.bukkit.BukkitUtils;
@@ -124,7 +128,8 @@ public class FireworkMatchModule implements MatchModule, Listener {
 
   @EventHandler(priority = EventPriority.MONITOR)
   public void onWoolPlace(final PlayerWoolPlaceEvent event) {
-    if (PGM.get().getConfiguration().showFireworks() && event.getWool().isVisible()) {
+    if (PGM.get().getConfiguration().showFireworks()
+        && event.getWool().hasShowOption(ShowOption.SHOW_EFFECTS)) {
       this.spawnFireworkDisplay(
           BlockVectors.center(event.getBlock()),
           event.getWool().getDyeColor().getColor(),
@@ -139,7 +144,8 @@ public class FireworkMatchModule implements MatchModule, Listener {
 
   @EventHandler(priority = EventPriority.MONITOR)
   public void onCoreLeak(final CoreLeakEvent event) {
-    if (PGM.get().getConfiguration().showFireworks() && event.getCore().isVisible()) {
+    if (PGM.get().getConfiguration().showFireworks()
+        && event.getCore().hasShowOption(ShowOption.SHOW_EFFECTS)) {
       this.spawnFireworkDisplay(
           event.getMatch().getWorld(),
           event.getCore().getCasingRegion(),
@@ -155,7 +161,8 @@ public class FireworkMatchModule implements MatchModule, Listener {
 
   @EventHandler(priority = EventPriority.MONITOR)
   public void onDestroyableBreak(final DestroyableDestroyedEvent event) {
-    if (PGM.get().getConfiguration().showFireworks() && event.getDestroyable().isVisible()) {
+    if (PGM.get().getConfiguration().showFireworks()
+        && event.getDestroyable().hasShowOption(ShowOption.SHOW_EFFECTS)) {
       this.spawnFireworkDisplay(
           event.getMatch().getWorld(),
           event.getDestroyable().getBlockRegion(),
@@ -172,7 +179,7 @@ public class FireworkMatchModule implements MatchModule, Listener {
   @EventHandler(priority = EventPriority.MONITOR)
   public void onHillCapture(final ControllerChangeEvent event) {
     if (PGM.get().getConfiguration().showFireworks()
-        && event.getControlPoint().isVisible()
+        && event.getControlPoint().hasShowOption(ShowOption.SHOW_EFFECTS)
         && event.getNewController() != null) {
       this.spawnFireworkDisplay(
           event.getMatch().getWorld(),
@@ -189,7 +196,8 @@ public class FireworkMatchModule implements MatchModule, Listener {
 
   @EventHandler(priority = EventPriority.MONITOR)
   public void onFlagCapture(final FlagCaptureEvent event) {
-    if (PGM.get().getConfiguration().showFireworks() && event.getGoal().isVisible()) {
+    if (PGM.get().getConfiguration().showFireworks()
+        && event.getGoal().hasShowOption(ShowOption.SHOW_EFFECTS)) {
       this.spawnFireworkDisplay(
           event.getMatch().getWorld(),
           event.getNet().getRegion(),
@@ -202,6 +210,7 @@ public class FireworkMatchModule implements MatchModule, Listener {
 
   public void spawnFireworkDisplay(
       Location center, Color color, int count, double radius, int power) {
+    if (Double.isInfinite(radius)) return;
     FireworkEffect effect =
         FireworkEffect.builder()
             .with(Type.BURST)
@@ -214,27 +223,24 @@ public class FireworkMatchModule implements MatchModule, Listener {
       double angle = 2 * Math.PI / count * i;
       double dx = radius * Math.cos(angle);
       double dz = radius * Math.sin(angle);
-      Location baseLocation = center.clone().add(dx, 0, dz);
+      Location loc = getOpenSpaceAbove(center.clone().add(dx, 0, dz));
 
-      Block block = baseLocation.getBlock();
-      if (block == null || !block.getType().isOccluding()) {
-        spawnFirework(getOpenSpaceAbove(baseLocation), effect, power);
-      }
+      if (loc != null) spawnFirework(loc, effect, power);
     }
   }
 
   public void spawnFireworkDisplay(
       World world, Region region, Color color, int count, double radiusMultiplier, int power) {
     final Bounds bound = region.getBounds();
-    final double radius = bound.getMax().subtract(bound.getMin()).multiply(0.5).length();
-    final Location center = bound.getMin().getMidpoint(bound.getMax()).toLocation(world);
+    final double radius = bound.getSize().setY(0).multiply(0.5).length();
+    final Location center = bound.getCenterPoint().toLocation(world);
     this.spawnFireworkDisplay(center, color, count, radiusMultiplier * radius, power);
   }
 
   public static Firework spawnFirework(Location location, FireworkEffect effect, int power) {
-    Preconditions.checkNotNull(location, "location");
-    Preconditions.checkNotNull(effect, "firework effect");
-    Preconditions.checkArgument(power >= 0, "power must be positive");
+    assertNotNull(location, "location");
+    assertNotNull(effect, "firework effect");
+    assertTrue(power >= 0, "power must be positive");
 
     FireworkMeta meta = (FireworkMeta) Bukkit.getItemFactory().getItemMeta(Material.FIREWORK);
     meta.setPower(power);
@@ -247,16 +253,22 @@ public class FireworkMatchModule implements MatchModule, Listener {
   }
 
   public static Location getOpenSpaceAbove(Location location) {
-    Preconditions.checkNotNull(location, "location");
+    assertNotNull(location, "location");
 
-    Location result = location.clone();
-    while (true) {
-      Block block = result.getBlock();
-      if (block == null || block.getType() == Material.AIR) break;
+    Block block = location.getBlock();
 
-      result.setY(result.getY() + 1);
-    }
+    int maxSearch = 25;
+    while (block != null && block.getType().isOccluding() && maxSearch-- > 0)
+      block = block.getRelative(BlockFace.UP);
+    if (maxSearch < 0 || block == null) return null;
 
-    return result;
+    maxSearch = 25;
+    while (block != null && block.getType() != Material.AIR && maxSearch-- > 0)
+      block = block.getRelative(BlockFace.UP);
+    if (maxSearch < 0 || block == null) return null;
+
+    // Returning original location ensure x & z are not affected.
+    location.setY(block.getY() + 0.5d);
+    return location;
   }
 }

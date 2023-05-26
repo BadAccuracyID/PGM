@@ -1,15 +1,18 @@
 package tc.oc.pgm.goals;
 
-import javax.annotation.Nullable;
+import java.util.Optional;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Color;
 import org.bukkit.DyeColor;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.feature.Feature;
+import tc.oc.pgm.api.filter.Filter;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.party.Competitor;
 import tc.oc.pgm.api.party.Party;
+import tc.oc.pgm.filters.matcher.party.GoalFilter;
 
 /** TODO: Extract CompletableGoal which flags and CPs don't implement */
 public interface Goal<T extends GoalDefinition> extends Feature<T> {
@@ -30,21 +33,25 @@ public interface Goal<T extends GoalDefinition> extends Feature<T> {
    */
   boolean isCompleted(Competitor team);
 
+  default boolean isCompleted(Optional<? extends Competitor> competitor) {
+    return competitor.isPresent() ? isCompleted(competitor.get()) : isCompleted();
+  }
+
   /**
    * Returns true if this goal can be completed by multiple teams (e.g. a capture point). Currently,
    * this affects how the goal is displayed on the scoreboard, and how it interacts with {@link
-   * tc.oc.pgm.filters.GoalFilter}.
+   * GoalFilter}.
    */
   boolean isShared();
 
   /**
-   * Returns true if the goal acts "normally". Normal behavior is defined when the goal is visible
-   * via mediums such as a {@link net.kyori.adventure.bossbar.BossBar}, the Scoreboard, and chat. If
-   * a call to this method returns false, this goal will not show up anywhere.
-   *
-   * <p>In most cases, this should simply delegate to {@link GoalDefinition#isVisible()}
+   * Returns true if the goal has the provided {@link tc.oc.pgm.goals.ShowOption}. Objective options
+   * define the goal behavior, making it visible only via certain mediums such as the scoreboard and
+   * chat.
    */
-  boolean isVisible();
+  boolean hasShowOption(ShowOption option);
+
+  Filter getScoreboardFilter();
 
   boolean isRequired();
 
@@ -65,11 +72,11 @@ public interface Goal<T extends GoalDefinition> extends Feature<T> {
 
   Sound getCompletionSound(boolean positive);
 
-  ChatColor renderSidebarStatusColor(@Nullable Competitor competitor, Party viewer);
+  TextColor renderSidebarStatusColor(@Nullable Competitor competitor, Party viewer);
 
-  String renderSidebarStatusText(@Nullable Competitor competitor, Party viewer);
+  Component renderSidebarStatusText(@Nullable Competitor competitor, Party viewer);
 
-  ChatColor renderSidebarLabelColor(@Nullable Competitor competitor, Party viewer);
+  TextColor renderSidebarLabelColor(@Nullable Competitor competitor, Party viewer);
 
   Component renderSidebarLabelText(@Nullable Competitor competitor, Party viewer);
 }

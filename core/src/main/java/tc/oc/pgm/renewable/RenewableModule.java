@@ -15,30 +15,36 @@ import tc.oc.pgm.api.map.factory.MapFactory;
 import tc.oc.pgm.api.map.factory.MapModuleFactory;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchModule;
-import tc.oc.pgm.filters.AllFilter;
-import tc.oc.pgm.filters.AnyFilter;
 import tc.oc.pgm.filters.FilterModule;
-import tc.oc.pgm.filters.FilterParser;
-import tc.oc.pgm.filters.StaticFilter;
+import tc.oc.pgm.filters.matcher.StaticFilter;
+import tc.oc.pgm.filters.operator.AllFilter;
+import tc.oc.pgm.filters.operator.AnyFilter;
+import tc.oc.pgm.filters.parse.FilterParser;
 import tc.oc.pgm.regions.EverywhereRegion;
 import tc.oc.pgm.regions.RegionModule;
 import tc.oc.pgm.regions.RegionParser;
+import tc.oc.pgm.snapshot.SnapshotMatchModule;
 import tc.oc.pgm.util.xml.InvalidXMLException;
 import tc.oc.pgm.util.xml.XMLUtils;
 
-public class RenewableModule implements MapModule {
+public class RenewableModule implements MapModule<RenewableMatchModule> {
   private static final double DEFAULT_AVOID_PLAYERS_RANGE = 2d;
 
   private final List<RenewableDefinition> renewableDefinitions = new ArrayList<>();
 
   @Override
-  public MatchModule createMatchModule(Match match) {
+  public Collection<Class<? extends MatchModule>> getHardDependencies() {
+    return ImmutableList.of(SnapshotMatchModule.class);
+  }
+
+  @Override
+  public RenewableMatchModule createMatchModule(Match match) {
     return new RenewableMatchModule(match, this.renewableDefinitions);
   }
 
   public static class Factory implements MapModuleFactory<RenewableModule> {
     @Override
-    public Collection<Class<? extends MapModule>> getWeakDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getWeakDependencies() {
       return ImmutableList.of(RegionModule.class, FilterModule.class);
     }
 
@@ -53,7 +59,7 @@ public class RenewableModule implements MapModule {
           XMLUtils.flattenElements(doc.getRootElement(), "renewables", "renewable")) {
         RenewableDefinition renewableDefinition = new RenewableDefinition();
         renewableDefinition.region =
-            regionParser.parseRegionProperty(elRenewable, EverywhereRegion.INSTANCE, "region");
+            regionParser.parseProperty(elRenewable, "region", EverywhereRegion.INSTANCE);
 
         renewableDefinition.renewableBlocks =
             parseFilter(filterParser, elRenewable, "renew", StaticFilter.ALLOW);
@@ -117,13 +123,13 @@ public class RenewableModule implements MapModule {
         if (inline.isEmpty()) {
           return def;
         } else {
-          return new AnyFilter(inline);
+          return AnyFilter.of(inline);
         }
       } else {
         if (inline.isEmpty()) {
           return property;
         } else {
-          return AllFilter.of(property, new AnyFilter(inline));
+          return AllFilter.of(property, AnyFilter.of(inline));
         }
       }
     }

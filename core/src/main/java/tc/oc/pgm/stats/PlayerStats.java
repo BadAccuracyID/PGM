@@ -1,7 +1,7 @@
 package tc.oc.pgm.stats;
 
 import static net.kyori.adventure.text.Component.translatable;
-import static tc.oc.pgm.stats.StatsMatchModule.numberComponent;
+import static tc.oc.pgm.util.text.NumberComponent.number;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -20,6 +20,7 @@ public class PlayerStats {
   // Bow
   private int longestBowKill;
   private double bowDamage;
+  private double bowDamageTaken;
   private int shotsTaken;
   private int shotsHit;
 
@@ -59,8 +60,11 @@ public class PlayerStats {
     }
   }
 
-  protected void onDamaged(double damage) {
+  protected void onDamaged(double damage, boolean bow) {
     damageTaken += damage;
+    if (bow) {
+      bowDamageTaken += damage;
+    }
   }
 
   protected void onDestroyablePieceBroken(int change) {
@@ -102,10 +106,10 @@ public class PlayerStats {
     return translatable(
         "match.stats",
         NamedTextColor.GRAY,
-        numberComponent(kills, NamedTextColor.GREEN),
-        numberComponent(killstreak, NamedTextColor.GREEN),
-        numberComponent(deaths, NamedTextColor.RED),
-        numberComponent(getKD(), NamedTextColor.GREEN));
+        number(kills, NamedTextColor.GREEN),
+        number(killstreak, NamedTextColor.GREEN),
+        number(deaths, NamedTextColor.RED),
+        number(getKD(), NamedTextColor.GREEN));
   }
 
   // Getters, both raw stats and some handy calculations
@@ -142,6 +146,10 @@ public class PlayerStats {
 
   public double getBowDamage() {
     return bowDamage;
+  }
+
+  public double getBowDamageTaken() {
+    return bowDamageTaken;
   }
 
   public int getShotsTaken() {

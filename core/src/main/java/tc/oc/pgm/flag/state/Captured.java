@@ -2,11 +2,14 @@ package tc.oc.pgm.flag.state;
 
 import static net.kyori.adventure.text.Component.translatable;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Location;
 import tc.oc.pgm.api.party.Party;
 import tc.oc.pgm.filters.query.GoalQuery;
 import tc.oc.pgm.flag.Flag;
-import tc.oc.pgm.flag.Net;
+import tc.oc.pgm.flag.NetDefinition;
 import tc.oc.pgm.flag.Post;
 import tc.oc.pgm.flag.event.FlagCaptureEvent;
 import tc.oc.pgm.flag.event.FlagStateChangeEvent;
@@ -17,11 +20,11 @@ import tc.oc.pgm.flag.event.FlagStateChangeEvent;
  */
 public class Captured extends BaseState implements Returning {
 
-  protected final Net net;
+  protected final NetDefinition net;
   protected final Location lastLocation;
   protected boolean wasDelayed;
 
-  protected Captured(Flag flag, Post post, Net net, Location lastLocation) {
+  protected Captured(Flag flag, Post post, NetDefinition net, Location lastLocation) {
     super(flag, post);
     this.net = net;
     this.lastLocation = lastLocation;
@@ -78,14 +81,14 @@ public class Captured extends BaseState implements Returning {
   }
 
   @Override
-  public String getStatusSymbol(Party viewer) {
+  public Component getStatusSymbol(Party viewer) {
     return Flag.RESPAWNING_SYMBOL;
   }
 
   @Override
-  public org.bukkit.ChatColor getStatusColor(Party viewer) {
+  public TextColor getStatusColor(Party viewer) {
     if (this.flag.getDefinition().hasMultipleCarriers()) {
-      return org.bukkit.ChatColor.WHITE;
+      return NamedTextColor.WHITE;
     } else {
       return super.getStatusColor(viewer);
     }

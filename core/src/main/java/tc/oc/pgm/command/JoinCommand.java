@@ -1,43 +1,44 @@
 package tc.oc.pgm.command;
 
-import app.ashcon.intake.Command;
-import app.ashcon.intake.parametric.annotation.Switch;
-import javax.annotation.Nullable;
+import cloud.commandframework.annotations.Argument;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
+import cloud.commandframework.annotations.CommandPermission;
+import cloud.commandframework.annotations.Flag;
+import cloud.commandframework.annotations.specifier.FlagYielding;
 import tc.oc.pgm.api.Permissions;
-import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.party.Competitor;
 import tc.oc.pgm.api.party.Party;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.join.JoinMatchModule;
+import tc.oc.pgm.join.JoinRequest;
 
 public final class JoinCommand {
 
-  @Command(
-      aliases = {"join", "play"},
-      desc = "Join the match",
-      usage = "[team] - defaults to random",
-      flags = "f",
-      perms = Permissions.JOIN)
+  @CommandMethod("join|play [team]")
+  @CommandDescription("Join the match")
+  @CommandPermission(Permissions.JOIN)
   public void join(
-      Match match, MatchPlayer player, @Switch('f') boolean force, @Nullable Party team) {
+      JoinMatchModule joiner,
+      MatchPlayer player,
+      @Flag(value = "force", aliases = "f") boolean force,
+      @Argument("team") @FlagYielding Party team) {
     if (team != null && !(team instanceof Competitor)) {
-      leave(player, match);
+      leave(joiner, player);
       return;
     }
 
-    final JoinMatchModule join = match.needModule(JoinMatchModule.class);
     if (force && player.getBukkit().hasPermission(Permissions.JOIN_FORCE)) {
-      join.forceJoin(player, (Competitor) team);
+      joiner.forceJoin(player, (Competitor) team);
     } else {
-      join.join(player, (Competitor) team);
+      joiner.join(player, (Competitor) team);
     }
   }
 
-  @Command(
-      aliases = {"leave", "obs"},
-      desc = "Leave the match",
-      perms = Permissions.LEAVE)
-  public void leave(MatchPlayer player, Match match) {
-    match.needModule(JoinMatchModule.class).leave(player);
+  @CommandMethod("leave|obs|spectator|spec")
+  @CommandDescription("Leave the match")
+  @CommandPermission(Permissions.LEAVE)
+  public void leave(JoinMatchModule joiner, MatchPlayer player) {
+    joiner.leave(player, JoinRequest.empty());
   }
 }

@@ -2,18 +2,19 @@ package tc.oc.pgm.flag.state;
 
 import static net.kyori.adventure.text.Component.text;
 import static net.kyori.adventure.text.Component.translatable;
+import static tc.oc.pgm.util.text.TemporalComponent.duration;
 
 import java.time.Duration;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TranslatableComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Location;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.party.Party;
 import tc.oc.pgm.flag.Flag;
 import tc.oc.pgm.flag.Post;
 import tc.oc.pgm.goals.events.GoalStatusChangeEvent;
-import tc.oc.pgm.util.text.TemporalComponent;
 
 /**
  * State of a flag while it is waiting to respawn at a {@link Post} after being {@link Captured}.
@@ -23,7 +24,6 @@ public class Respawning extends Spawned implements Returning {
 
   protected final @Nullable Location respawnFrom;
   protected final Location respawnTo;
-  protected final Post respawnToPost;
   protected final Duration respawnTime;
   protected final boolean wasCaptured;
   protected final boolean wasDelayed;
@@ -36,8 +36,7 @@ public class Respawning extends Spawned implements Returning {
       boolean wasDelayed) {
     super(flag, post);
     this.respawnFrom = respawnFrom;
-    respawnToPost = this.flag.getReturnPost(this.post);
-    this.respawnTo = this.respawnToPost.getReturnPoint(this.flag, this.flag.getBannerYawProvider());
+    this.respawnTo = this.flag.getReturnPoint(this.post);
     this.respawnTime =
         this.post.getRespawnTime(
             this.respawnFrom == null ? 0 : this.respawnFrom.distance(this.respawnTo));
@@ -54,28 +53,20 @@ public class Respawning extends Spawned implements Returning {
   public void enterState() {
     super.enterState();
 
-    if (!Duration.ZERO.equals(respawnTime)) {
-      // Respawn is delayed
-      String postName = this.respawnToPost.getPostName();
-      Component timeComponent =
-          TemporalComponent.briefNaturalApproximate(respawnTime).color(NamedTextColor.AQUA);
+    if (Duration.ZERO.equals(respawnTime)) return;
+    // Respawn is delayed
+    String postName = this.post.getPostName();
 
-      if (postName != null) {
-        this.flag
-            .getMatch()
-            .sendMessage(
-                translatable(
-                    "flag.willRespawn.named",
-                    this.flag.getComponentName(),
-                    text(postName, NamedTextColor.AQUA),
-                    timeComponent));
-      } else {
-        this.flag
-            .getMatch()
-            .sendMessage(
-                translatable("flag.willRespawn", this.flag.getComponentName(), timeComponent));
-      }
-    }
+    TranslatableComponent timeComponent = duration(respawnTime, NamedTextColor.AQUA);
+    Component message =
+        postName != null
+            ? translatable(
+                "flag.willRespawn.named",
+                this.flag.getComponentName(),
+                text(postName, NamedTextColor.AQUA),
+                timeComponent)
+            : translatable("flag.willRespawn", this.flag.getComponentName(), timeComponent);
+    this.flag.getMatch().sendMessage(message);
   }
 
   protected void respawn(@Nullable Component message) {
@@ -84,7 +75,7 @@ public class Respawning extends Spawned implements Returning {
       this.flag.getMatch().sendMessage(message);
     }
 
-    this.flag.transition(new Returned(this.flag, this.respawnToPost, this.respawnTo));
+    this.flag.transition(new Returned(this.flag, this.post, this.respawnTo));
   }
 
   @Override
@@ -120,12 +111,12 @@ public class Respawning extends Spawned implements Returning {
   }
 
   @Override
-  public String getStatusSymbol(Party viewer) {
+  public Component getStatusSymbol(Party viewer) {
     return Flag.RESPAWNING_SYMBOL;
   }
 
   @Override
-  public ChatColor getStatusColor(Party viewer) {
-    return ChatColor.GRAY;
+  public TextColor getStatusColor(Party viewer) {
+    return NamedTextColor.GRAY;
   }
 }

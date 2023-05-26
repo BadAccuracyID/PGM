@@ -1,11 +1,10 @@
 package tc.oc.pgm.api.map;
 
-import java.text.Normalizer;
 import java.time.LocalDate;
 import java.util.Collection;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.util.Version;
 import tc.oc.pgm.util.named.MapNameStyle;
 import tc.oc.pgm.util.text.TextTranslations;
@@ -19,6 +18,14 @@ public interface MapInfo extends Comparable<MapInfo>, Cloneable {
    * @return A unique id.
    */
   String getId();
+
+  /**
+   * The map variant this info represents
+   *
+   * @return A variant for the map, if any.
+   */
+  @Nullable
+  String getVariant();
 
   /**
    * Get the proto of the map's {@link org.jdom2.Document}.
@@ -38,9 +45,16 @@ public interface MapInfo extends Comparable<MapInfo>, Cloneable {
   /**
    * Get a unique, human-readable name for the map.
    *
-   * @return A name, alphanumeric with spaces are allowed.
+   * @return A name, alphanumeric with spaces allowed.
    */
   String getName();
+
+  /**
+   * Get the maps' name, but normalized to standard english characters and lower case.
+   *
+   * @return The map's name, lowercase with spaces allowed.
+   */
+  String getNormalizedName();
 
   /**
    * Gets a styled map name.
@@ -144,22 +158,29 @@ public interface MapInfo extends Comparable<MapInfo>, Cloneable {
   Phase getPhase();
 
   /**
-   * Create an immutable copy of this info.
+   * Get whether friendly fire should be on or off.
    *
-   * @return A cloned {@link MapInfo}.
+   * @return True if friendly fire is on.
    */
-  MapInfo clone();
+  boolean getFriendlyFire();
+
+  /**
+   * Get a {@link MapSource} to access the maps's files.
+   *
+   * @return A {@link MapSource}.
+   */
+  MapSource getSource();
+
+  /**
+   * Get the {@link MapContext} for this map, it may be null if the map unloaded
+   *
+   * @return A {@link MapContext} for this map, or null if unloaded.
+   */
+  @Nullable
+  MapContext getContext();
 
   @Override
   default int compareTo(MapInfo o) {
     return getId().compareTo(o.getId());
-  }
-
-  static String normalizeName(@Nullable String idOrName) {
-    return idOrName == null
-        ? ""
-        : Normalizer.normalize(idOrName, Normalizer.Form.NFD)
-            .replaceAll("[^A-Za-z0-9]", "")
-            .toLowerCase();
   }
 }

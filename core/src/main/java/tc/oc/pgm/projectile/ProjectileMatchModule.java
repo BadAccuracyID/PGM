@@ -1,13 +1,14 @@
 package tc.oc.pgm.projectile;
 
-import static com.google.common.base.Preconditions.checkState;
+import static tc.oc.pgm.util.Assert.assertTrue;
 
+import com.google.common.collect.ImmutableSet;
 import java.util.HashSet;
 import java.util.Set;
-import javax.annotation.Nullable;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Fireball;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -26,6 +27,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.util.BlockIterator;
 import org.bukkit.util.Vector;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.event.BlockTransformEvent;
 import tc.oc.pgm.api.filter.Filter;
@@ -40,6 +42,8 @@ import tc.oc.pgm.filters.query.BlockQuery;
 import tc.oc.pgm.filters.query.PlayerBlockQuery;
 import tc.oc.pgm.kits.tag.ItemTags;
 import tc.oc.pgm.util.bukkit.MetadataUtils;
+import tc.oc.pgm.util.inventory.InventoryUtils;
+import tc.oc.pgm.util.nms.NMSHacks;
 
 @ListenerScope(MatchScope.RUNNING)
 public class ProjectileMatchModule implements MatchModule, Listener {
@@ -52,12 +56,13 @@ public class ProjectileMatchModule implements MatchModule, Listener {
   private static final ThreadLocal<ProjectileDefinition> launchingDefinition = new ThreadLocal<>();
 
   private final Match match;
-  private final Set<ProjectileDefinition> projectileDefinitions;
-  private Set<ProjectileCooldown> projectileCooldowns = new HashSet<>();
+  private final ImmutableSet<ProjectileDefinition> projectileDefinitions;
+  private final Set<ProjectileCooldown> projectileCooldowns = new HashSet<>();
 
   private static final String DEFINITION_KEY = "projectileDefinition";
 
-  public ProjectileMatchModule(Match match, Set<ProjectileDefinition> projectileDefinitions) {
+  public ProjectileMatchModule(
+      Match match, ImmutableSet<ProjectileDefinition> projectileDefinitions) {
     this.match = match;
     this.projectileDefinitions = projectileDefinitions;
   }
@@ -86,12 +91,15 @@ public class ProjectileMatchModule implements MatchModule, Listener {
           player.getEyeLocation().getDirection().multiply(projectileDefinition.velocity);
       Entity projectile;
       try {
-        checkState(launchingDefinition.get() == null, "nested projectile launch");
+        assertTrue(launchingDefinition.get() == null, "nested projectile launch");
         launchingDefinition.set(projectileDefinition);
         if (realProjectile) {
           projectile =
               player.launchProjectile(
                   projectileDefinition.projectile.asSubclass(Projectile.class), velocity);
+          if (projectile instanceof Fireball && projectileDefinition.precise) {
+            NMSHacks.setFireballDirection((Fireball) projectile, velocity);
+          }
         } else {
           projectile =
               player.getWorld().spawn(player.getEyeLocation(), projectileDefinition.projectile);
@@ -116,12 +124,7 @@ public class ProjectileMatchModule implements MatchModule, Listener {
       }
 
       if (projectileDefinition.throwable) {
-        ItemStack itemInHand = player.getItemInHand();
-        if (itemInHand.getAmount() > 1) {
-          itemInHand.setAmount(itemInHand.getAmount() - 1);
-        } else {
-          player.setItemInHand(null);
-        }
+        InventoryUtils.consumeItem(player);
       }
 
       if (projectileDefinition.coolDown != null) {

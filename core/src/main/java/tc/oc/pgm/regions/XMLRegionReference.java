@@ -1,31 +1,27 @@
 package tc.oc.pgm.regions;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Random;
-import javax.annotation.Nullable;
+import java.util.stream.Stream;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Entity;
 import org.bukkit.event.Event;
 import org.bukkit.util.BlockVector;
 import org.bukkit.util.Vector;
-import tc.oc.pgm.api.filter.query.Query;
+import org.jetbrains.annotations.Nullable;
+import tc.oc.pgm.api.filter.query.LocationQuery;
 import tc.oc.pgm.api.region.Region;
 import tc.oc.pgm.api.region.RegionDefinition;
 import tc.oc.pgm.features.FeatureDefinitionContext;
 import tc.oc.pgm.features.XMLFeatureReference;
-import tc.oc.pgm.util.event.PlayerCoarseMoveEvent;
+import tc.oc.pgm.util.chunk.ChunkVector;
 import tc.oc.pgm.util.xml.Node;
 
 public class XMLRegionReference extends XMLFeatureReference<RegionDefinition> implements Region {
-
-  public XMLRegionReference(
-      FeatureDefinitionContext context, Node node, Class<RegionDefinition> type) {
-    super(context, node, type);
-  }
 
   public XMLRegionReference(
       FeatureDefinitionContext context,
@@ -63,6 +59,11 @@ public class XMLRegionReference extends XMLFeatureReference<RegionDefinition> im
   @Override
   public boolean contains(Entity entity) {
     return get().contains(entity);
+  }
+
+  @Override
+  public boolean contains(LocationQuery query) {
+    return get().contains(query);
   }
 
   @Override
@@ -122,16 +123,30 @@ public class XMLRegionReference extends XMLFeatureReference<RegionDefinition> im
 
   @Override
   public Collection<Class<? extends Event>> getRelevantEvents() {
-    return Collections.singleton(PlayerCoarseMoveEvent.class);
+    return get().getRelevantEvents();
   }
 
   @Override
-  public Class<? extends Query> getQueryType() {
-    return get().getQueryType();
+  public boolean matches(LocationQuery query) {
+    return get().matches(query);
   }
 
   @Override
-  public QueryResponse query(Query query) {
-    return get().query(query);
+  public Class<? extends LocationQuery> queryType() {
+    return LocationQuery.class;
+  }
+
+  @Override
+  public Stream<BlockVector> getBlockPositions() {
+    return get().getBlockPositions();
+  }
+
+  @Override
+  public Iterable<Block> getBlocks(World world) {
+    return get().getBlocks(world);
+  }
+
+  public Stream<ChunkVector> getChunkPositions() {
+    return get().getChunkPositions();
   }
 }

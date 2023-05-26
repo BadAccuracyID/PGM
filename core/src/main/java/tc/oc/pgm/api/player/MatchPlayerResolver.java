@@ -1,10 +1,10 @@
 package tc.oc.pgm.api.player;
 
 import java.util.UUID;
-import javax.annotation.Nullable;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Helper interface to resolve a {@link MatchPlayer}, {@link MatchPlayerState}, or {@link
@@ -28,6 +28,13 @@ public interface MatchPlayerResolver {
   @Nullable
   default MatchPlayer getPlayer(@Nullable UUID playerId) {
     return playerId == null ? null : getPlayer(Bukkit.getPlayer(playerId));
+  }
+
+  @Nullable
+  default MatchPlayerState getPlayerState(@Nullable UUID playerId) {
+    if (playerId == null) return null;
+    MatchPlayer matchPlayer = getPlayer(playerId);
+    return matchPlayer == null ? null : matchPlayer.getState();
   }
 
   @Nullable

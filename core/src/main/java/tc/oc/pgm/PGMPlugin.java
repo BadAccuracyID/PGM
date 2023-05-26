@@ -15,9 +15,8 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
-import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Server;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.Listener;
@@ -25,25 +24,38 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginLoader;
 import org.bukkit.plugin.java.JavaPlugin;
-import tc.oc.pgm.api.*;
+import org.jetbrains.annotations.Nullable;
+import tc.oc.pgm.api.Config;
+import tc.oc.pgm.api.Datastore;
+import tc.oc.pgm.api.PGM;
+import tc.oc.pgm.api.Permissions;
+import tc.oc.pgm.api.integration.Integration;
 import tc.oc.pgm.api.map.Contributor;
 import tc.oc.pgm.api.map.MapInfo;
 import tc.oc.pgm.api.map.MapLibrary;
 import tc.oc.pgm.api.map.MapOrder;
 import tc.oc.pgm.api.map.exception.MapException;
 import tc.oc.pgm.api.map.factory.MapSourceFactory;
+import tc.oc.pgm.api.map.includes.MapIncludeProcessor;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchManager;
 import tc.oc.pgm.api.module.Module;
 import tc.oc.pgm.api.module.exception.ModuleLoadException;
-import tc.oc.pgm.api.player.VanishManager;
-import tc.oc.pgm.command.graph.CommandExecutor;
-import tc.oc.pgm.command.graph.CommandGraph;
-import tc.oc.pgm.community.command.CommunityCommandGraph;
+import tc.oc.pgm.command.util.PGMCommandGraph;
 import tc.oc.pgm.db.CacheDatastore;
 import tc.oc.pgm.db.SQLDatastore;
-import tc.oc.pgm.listeners.*;
+import tc.oc.pgm.integrations.SimpleVanishIntegration;
+import tc.oc.pgm.listeners.AntiGriefListener;
+import tc.oc.pgm.listeners.BlockTransformListener;
+import tc.oc.pgm.listeners.FormattingListener;
+import tc.oc.pgm.listeners.JoinLeaveAnnouncer;
+import tc.oc.pgm.listeners.MatchAnnouncer;
+import tc.oc.pgm.listeners.MotdListener;
+import tc.oc.pgm.listeners.PGMListener;
+import tc.oc.pgm.listeners.ServerPingDataListener;
+import tc.oc.pgm.listeners.WorldProblemListener;
 import tc.oc.pgm.map.MapLibraryImpl;
+import tc.oc.pgm.map.includes.MapIncludeProcessorImpl;
 import tc.oc.pgm.match.MatchManagerImpl;
 import tc.oc.pgm.namedecorations.ConfigDecorationProvider;
 import tc.oc.pgm.namedecorations.NameDecorationRegistry;
@@ -71,6 +83,7 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
   private Logger gameLogger;
   private Datastore datastore;
   private MapLibrary mapLibrary;
+  private MapIncludeProcessor mapIncludeProcessor;
   private List<MapSourceFactory> mapSourceFactories;
   private MatchManager matchManager;
   private MatchTabManager matchTabManager;
@@ -101,7 +114,6 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
       return; // Indicates the plugin failed to load, so exit early
     }
 
-    Modules.registerAll();
     Permissions.registerAll();
 
     final CommandSender console = getServer().getConsoleSender();
@@ -119,7 +131,8 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
     asyncExecutorService = new BukkitExecutorService(this, true);
 
     mapSourceFactories = new ArrayList<>();
-    mapLibrary = new MapLibraryImpl(gameLogger, mapSourceFactories);
+    mapIncludeProcessor = new MapIncludeProcessorImpl(gameLogger);
+    mapLibrary = new MapLibraryImpl(gameLogger, mapSourceFactories, mapIncludeProcessor);
 
     saveDefaultConfig(); // Writes a config file, if one does not exist.
     reloadConfig(); // Populates "this.config", if there is an error, will be null
@@ -161,7 +174,7 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
 
     if (config.getMapPoolFile() != null) {
       MapPoolManager manager =
-          new MapPoolManager(logger, new File(config.getMapPoolFile()), datastore);
+          new MapPoolManager(logger, config.getMapPoolFile().toFile(), datastore);
       if (manager.getActiveMapPool() != null) mapOrder = manager;
     }
     if (mapOrder == null) mapOrder = new RandomMapOrder(Lists.newArrayList(mapLibrary.getMaps()));
@@ -192,6 +205,9 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
     }
 
     matchManager = new MatchManagerImpl(logger);
+
+    if (config.isVanishEnabled())
+      Integration.setVanishIntegration(new SimpleVanishIntegration(matchManager, executorService));
 
     inventoryManager = new InventoryManager(this);
     inventoryManager.init();
@@ -231,8 +247,7 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
 
     if (!startup) {
       getGameLogger()
-          .log(
-              Level.INFO, ChatColor.GREEN + TextTranslations.translate("admin.reloadConfig", null));
+          .log(Level.INFO, ChatColor.GREEN + TextTranslations.translate("admin.reloadConfig"));
     }
 
     final Logger logger = getLogger();
@@ -302,22 +317,16 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
   }
 
   @Override
-  public VanishManager getVanishManager() {
-    return null;
-  }
-
-  @Override
   public InventoryManager getInventoryManager() {
     return inventoryManager;
   }
 
   private void registerCommands() {
-    final CommandGraph graph =
-        config.isCommunityMode() ? new CommunityCommandGraph() : new CommandGraph();
-
-    graph.register(ChatDispatcher.get());
-
-    new CommandExecutor(this, graph).register();
+    try {
+      new PGMCommandGraph(this);
+    } catch (Exception e) {
+      getLogger().log(Level.SEVERE, "Exception registering commands", e);
+    }
   }
 
   private void registerEvents(Object listener) {
@@ -343,6 +352,9 @@ public class PGMPlugin extends JavaPlugin implements PGM, Listener {
     registerEvents(new RestartListener(this, matchManager));
     registerEvents(new WorldProblemListener(this));
     registerEvents(new MatchAnnouncer());
+    registerEvents(new MotdListener());
+    registerEvents(new ServerPingDataListener(matchManager, mapOrder, getLogger()));
+    registerEvents(new JoinLeaveAnnouncer(matchManager));
   }
 
   private class InGameHandler extends Handler {

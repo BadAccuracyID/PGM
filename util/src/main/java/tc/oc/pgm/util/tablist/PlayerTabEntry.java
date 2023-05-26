@@ -1,13 +1,12 @@
 package tc.oc.pgm.util.tablist;
 
-import static tc.oc.pgm.util.text.PlayerComponent.player;
+import static net.kyori.adventure.text.Component.text;
 
 import java.util.UUID;
-import javax.annotation.Nullable;
+import java.util.function.Function;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import tc.oc.pgm.util.event.player.PlayerSkinPartsChangeEvent;
-import tc.oc.pgm.util.named.NameStyle;
 import tc.oc.pgm.util.nms.NMSHacks;
 import tc.oc.pgm.util.skin.Skin;
 
@@ -21,6 +20,11 @@ import tc.oc.pgm.util.skin.Skin;
 public class PlayerTabEntry extends DynamicTabEntry {
 
   private static boolean showPing = false;
+  private static Function<Player, Component> playerComponent = p -> text(p.getName());
+
+  public static void setPlayerComponent(Function<Player, Component> playerComponent) {
+    PlayerTabEntry.playerComponent = playerComponent;
+  }
 
   public static void setShowRealPing(boolean showPing) {
     PlayerTabEntry.showPing = showPing;
@@ -52,7 +56,7 @@ public class PlayerTabEntry extends DynamicTabEntry {
 
   @Override
   public Component getContent(TabView view) {
-    return player(player, NameStyle.TAB, view.getViewer());
+    return playerComponent.apply(player);
   }
 
   @Override
@@ -66,8 +70,18 @@ public class PlayerTabEntry extends DynamicTabEntry {
   }
 
   @Override
-  public @Nullable Skin getSkin(TabView view) {
-    return NMSHacks.getPlayerSkin(this.player);
+  public Skin getSkin(TabView view) {
+    Player viewer = view.getViewer();
+    if (viewer == null) {
+      return null;
+    }
+
+    // TODO: find different solution for non-SportPaper servers
+    return this.player.hasFakeSkin(viewer)
+        ? new Skin(
+            this.player.getFakeSkin(viewer).getData(),
+            this.player.getFakeSkin(viewer).getSignature())
+        : NMSHacks.getPlayerSkin(this.player);
   }
 
   @Override

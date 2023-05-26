@@ -2,16 +2,16 @@ package tc.oc.pgm.flag;
 
 import static net.kyori.adventure.key.Key.key;
 import static net.kyori.adventure.sound.Sound.sound;
+import static net.kyori.adventure.text.Component.text;
 import static net.kyori.adventure.text.Component.translatable;
 
 import com.google.common.collect.ImmutableSet;
 import java.util.Iterator;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
-import javax.annotation.Nullable;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.ChatColor;
 import org.bukkit.DyeColor;
 import org.bukkit.Location;
@@ -31,6 +31,7 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BannerMeta;
 import org.bukkit.util.BlockVector;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.event.BlockTransformEvent;
 import tc.oc.pgm.api.filter.query.LocationQuery;
 import tc.oc.pgm.api.filter.query.Query;
@@ -43,6 +44,7 @@ import tc.oc.pgm.api.player.ParticipantState;
 import tc.oc.pgm.api.region.Region;
 import tc.oc.pgm.flag.event.FlagCaptureEvent;
 import tc.oc.pgm.flag.event.FlagStateChangeEvent;
+import tc.oc.pgm.flag.post.PostDefinition;
 import tc.oc.pgm.flag.state.BaseState;
 import tc.oc.pgm.flag.state.Captured;
 import tc.oc.pgm.flag.state.Completed;
@@ -69,10 +71,10 @@ import tc.oc.pgm.util.text.TextTranslations;
 
 public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
 
-  public static final String RESPAWNING_SYMBOL = "\u2690"; // ⚐
-  public static final String RETURNED_SYMBOL = "\u2691"; // ⚑
-  public static final String DROPPED_SYMBOL = "\u2691"; // ⚑
-  public static final String CARRIED_SYMBOL = "\u2794"; // ➔
+  public static final Component RESPAWNING_SYMBOL = text("\u2690"); // ⚐
+  public static final Component RETURNED_SYMBOL = text("\u2691"); // ⚑
+  public static final Component DROPPED_SYMBOL = text("\u2691"); // ⚑
+  public static final Component CARRIED_SYMBOL = text("\u2794"); // ➔
 
   public static final Sound PICKUP_SOUND_OWN =
       sound(key("mob.wither.idle"), Sound.Source.MASTER, 0.7f, 1.2f);
@@ -88,7 +90,7 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
   public static final Sound RETURN_SOUND =
       sound(key("entity.firework_rocket.twinkle_far"), Sound.Source.MASTER, 1f, 1f);
 
-  private final ImmutableSet<Net> nets;
+  private final ImmutableSet<NetDefinition> nets;
   private final Location bannerLocation;
   private final BannerMeta bannerMeta;
   private final ItemStack bannerItem;
@@ -100,16 +102,15 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
   private final Set<Team> completers;
   private BaseState state;
   private boolean transitioning;
-  private @Nullable Post predeterminedPost;
 
-  protected Flag(Match match, FlagDefinition definition, ImmutableSet<Net> nets)
+  protected Flag(Match match, FlagDefinition definition, ImmutableSet<NetDefinition> nets)
       throws ModuleLoadException {
     super(definition, match);
     this.nets = nets;
 
     TeamMatchModule tmm = match.getModule(TeamMatchModule.class);
 
-    if (definition.getOwner() != null) {
+    if (definition.getOwner() != null && tmm != null) {
       this.owner = tmm.getTeam(definition.getOwner());
     } else {
       this.owner = null;
@@ -128,12 +129,13 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
 
     ImmutableSet.Builder<Team> controllersBuilder = ImmutableSet.builder();
     ImmutableSet.Builder<Team> completersBuilder = ImmutableSet.builder();
-    for (Net net : nets) {
-      if (net.getReturnPost() != null && net.getReturnPost().getOwner() != null) {
-        Team controller = tmm.getTeam(net.getReturnPost().getOwner());
+    for (NetDefinition net : nets) {
+      PostDefinition netPost = net.getReturnPost();
+      if (netPost != null && netPost.getFallback().getOwner() != null && tmm != null) {
+        Team controller = tmm.getTeam(netPost.getFallback().getOwner());
         controllersBuilder.add(controller);
 
-        if (net.getReturnPost().isPermanent()) {
+        if (net.getReturnPost().getFallback().isPermanent()) {
           completersBuilder.add(controller);
         }
       }
@@ -143,7 +145,7 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
 
     Banner banner = null;
     pointLoop:
-    for (PointProvider returnPoint : definition.getDefaultPost().getReturnPoints()) {
+    for (PointProvider returnPoint : definition.getDefaultPost().getFallback().getReturnPoints()) {
       Region region = returnPoint.getRegion();
       if (region instanceof PointRegion) {
         // Do not require PointRegions to be at the exact center of the block.
@@ -202,16 +204,20 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
     return BukkitUtils.dyeColorToChatColor(this.getDyeColor());
   }
 
+  public TextColor getTextColor() {
+    return TextFormatter.convert(this.getBukkitColor());
+  }
+
   @Override
   public Component getComponentName() {
     return super.getComponentName().color(TextFormatter.convert(getBukkitColor()));
   }
 
   public String getColoredName() {
-    return TextTranslations.translateLegacy(getComponentName(), null);
+    return TextTranslations.translateLegacy(getComponentName());
   }
 
-  public ImmutableSet<Net> getNets() {
+  public ImmutableSet<NetDefinition> getNets() {
     return nets;
   }
 
@@ -276,37 +282,12 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
     }
   }
 
-  private int sequentialPostCounter = 1;
-
-  public Post getReturnPost(Post post) {
-    if (post.isSpecifiedPost()) {
-      return post;
-    }
-    if (predeterminedPost != null) {
-      Post returnPost = predeterminedPost;
-      predeterminedPost = null;
-      return returnPost;
-    }
-    if (definition.isSequential()) {
-      sequentialPostCounter %= definition.getPosts().size();
-      return definition.getPosts().get(sequentialPostCounter++);
-    }
-    Random random = match.getRandom();
-    return definition.getPosts().get(random.nextInt(definition.getPosts().size()));
+  public Post getPost(PostDefinition post) {
+    return post == null ? null : match.needModule(FlagMatchModule.class).getPost(post);
   }
 
   public Location getReturnPoint(Post post) {
-    Post returnPost = getReturnPost(post);
-    return returnPost.getReturnPoint(this, this.bannerYawProvider).clone();
-  }
-
-  public String predeterminePost(Post post) {
-    predeterminedPost = getReturnPost(post);
-    return predeterminedPost.getPostName();
-  }
-
-  public AngleProvider getBannerYawProvider() {
-    return bannerYawProvider;
+    return post.getReturnPoint(this, this.bannerYawProvider).clone();
   }
 
   // Touchable
@@ -347,8 +328,9 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
 
   // Misc
 
-  public void load() {
-    this.state = new Returned(this, this.getDefinition().getDefaultPost(), this.bannerLocation);
+  public void load(FlagMatchModule fmm) {
+    this.state =
+        new Returned(this, fmm.getPost(this.getDefinition().getDefaultPost()), this.bannerLocation);
     this.state.enterState();
   }
 
@@ -402,7 +384,7 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
     return canPickup(query, state.getPost());
   }
 
-  public boolean canCapture(Query query, Net net) {
+  public boolean canCapture(Query query, NetDefinition net) {
     return getDefinition().getCaptureFilter().query(query).isAllowed()
         && net.getCaptureFilter().query(query).isAllowed();
   }
@@ -432,8 +414,9 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
     return this.state.isCarrying(party);
   }
 
-  public boolean isAtPost(Post post) {
-    return this.state.isAtPost(post);
+  public boolean isAtPost(PostDefinition post) {
+    return this.state.getPost().getDefinition() == post
+        || this.state.getPost().getCurrent() == post;
   }
 
   public boolean isCompletable() {
@@ -466,17 +449,17 @@ public class Flag extends TouchableGoal<FlagDefinition> implements Listener {
   }
 
   @Override
-  public String renderSidebarStatusText(@Nullable Competitor competitor, Party viewer) {
+  public Component renderSidebarStatusText(@Nullable Competitor competitor, Party viewer) {
     return this.state.getStatusText(viewer);
   }
 
   @Override
-  public ChatColor renderSidebarStatusColor(@Nullable Competitor competitor, Party viewer) {
+  public TextColor renderSidebarStatusColor(@Nullable Competitor competitor, Party viewer) {
     return this.state.getStatusColor(viewer);
   }
 
   @Override
-  public ChatColor renderSidebarLabelColor(@Nullable Competitor competitor, Party viewer) {
+  public TextColor renderSidebarLabelColor(@Nullable Competitor competitor, Party viewer) {
     return this.state.getLabelColor(viewer);
   }
 

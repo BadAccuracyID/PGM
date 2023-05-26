@@ -6,9 +6,9 @@ import static net.kyori.adventure.text.Component.translatable;
 
 import com.google.common.base.Splitter;
 import java.util.regex.Pattern;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.features.SelfIdentifyingFeatureDefinition;
 
@@ -20,17 +20,17 @@ import tc.oc.pgm.features.SelfIdentifyingFeatureDefinition;
  */
 public abstract class GoalDefinition extends SelfIdentifyingFeatureDefinition {
   private final @Nullable Boolean required;
-  private final boolean visible;
+  private final ShowOptions showOptions;
   private final String name;
   private final Component component;
 
   public GoalDefinition(
-      @Nullable String id, String name, @Nullable Boolean required, boolean visible) {
+      @Nullable String id, String name, @Nullable Boolean required, ShowOptions showOptions) {
     super(id);
     this.name = name;
     this.component = translateName(name);
     this.required = required;
-    this.visible = visible;
+    this.showOptions = showOptions;
   }
 
   @Override
@@ -54,8 +54,12 @@ public abstract class GoalDefinition extends SelfIdentifyingFeatureDefinition {
     return this.required;
   }
 
-  public boolean isVisible() {
-    return this.visible;
+  public boolean hasShowOption(ShowOption option) {
+    return this.getShowOptions().hasOption(option);
+  }
+
+  protected ShowOptions getShowOptions() {
+    return this.showOptions;
   }
 
   public Goal<? extends GoalDefinition> getGoal(Match match) {

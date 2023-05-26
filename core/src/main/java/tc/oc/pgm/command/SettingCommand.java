@@ -4,12 +4,12 @@ import static net.kyori.adventure.text.Component.text;
 import static net.kyori.adventure.text.Component.translatable;
 import static tc.oc.pgm.util.text.TextException.exception;
 
-import app.ashcon.intake.Command;
+import cloud.commandframework.annotations.Argument;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.command.CommandSender;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.api.setting.SettingKey;
 import tc.oc.pgm.api.setting.SettingValue;
@@ -21,34 +21,34 @@ import tc.oc.pgm.util.text.TextFormatter;
 // TODO: remove some of these when settings UI is released
 public final class SettingCommand {
 
-  @Command(
-      aliases = {"settings"},
-      desc = "Open the settings menu")
+  public static final SettingCommand INSTANCE = new SettingCommand();
+
+  public static SettingCommand getInstance() {
+    return INSTANCE;
+  }
+
+  private SettingCommand() {}
+
+  @CommandMethod("settings")
+  @CommandDescription("Open the settings menu")
   public void settings(MatchPlayer player) {
     new SettingsMenu(player);
   }
 
-  @Command(
-      aliases = {"tools", "observertools", "ot"},
-      desc = "Open the observer tools menu")
-  public void observerTools(MatchPlayer player) {
+  @CommandMethod("tools|observertools|ot")
+  @CommandDescription("Open the observer tools menu")
+  public void observerTools(MatchPlayer player, ObserverToolsMatchModule tools) {
     if (player.isObserving()) {
-      final ObserverToolsMatchModule tools =
-          player.getMatch().getModule(ObserverToolsMatchModule.class);
-      if (tools != null) {
-        tools.openMenu(player);
-      }
+      tools.openMenu(player);
     } else {
       // TODO: reconsider when observer tools become settings
       throw exception("setting.observersOnly");
     }
   }
 
-  @Command(
-      aliases = {"setting"},
-      desc = "Get the value of a setting",
-      usage = "[setting name]")
-  public void setting(MatchPlayer player, SettingKey key) {
+  @CommandMethod("setting <setting>")
+  @CommandDescription("Get the value of a setting")
+  public void setting(MatchPlayer player, @Argument("setting") SettingKey key) {
     final SettingValue value = player.getSettings().getValue(key);
 
     sendCurrentSetting(player, key, value);
@@ -62,21 +62,19 @@ public final class SettingCommand {
                 NamedTextColor.WHITE)));
   }
 
-  @Command(
-      aliases = {"toggle", "set"},
-      desc = "Toggle or set the value of a setting",
-      usage = "[setting name] <option>")
+  @CommandMethod("toggle|set <setting> [value]")
+  @CommandDescription("Toggle or set the value of a setting")
   public void toggle(
-      CommandSender sender, MatchPlayer player, SettingKey key, @Nullable String query) {
+      MatchPlayer player,
+      @Argument("setting") SettingKey key,
+      @Argument("value") SettingValue value) {
     final Settings setting = player.getSettings();
     final SettingValue old = setting.getValue(key);
 
-    final SettingValue value;
-    if (query == null) {
+    if (value == null) {
       setting.toggleValue(key);
       value = setting.getValue(key);
-    } else {
-      value = SettingValue.search(key, query);
+    } else if (old != value) {
       setting.setValue(key, value);
     }
 

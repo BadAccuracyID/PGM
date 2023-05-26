@@ -4,7 +4,6 @@ import static net.kyori.adventure.key.Key.key;
 import static net.kyori.adventure.sound.Sound.sound;
 
 import java.util.List;
-import javax.annotation.Nullable;
 import net.kyori.adventure.sound.Sound;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -14,6 +13,7 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.party.Competitor;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.api.player.ParticipantState;
@@ -25,6 +25,7 @@ import tc.oc.pgm.modules.ItemKeepMatchModule;
 import tc.oc.pgm.spawns.Spawn;
 import tc.oc.pgm.spawns.SpawnMatchModule;
 import tc.oc.pgm.spawns.events.ParticipantDespawnEvent;
+import tc.oc.pgm.spawns.events.ParticipantKitApplyEvent;
 import tc.oc.pgm.spawns.events.ParticipantSpawnEvent;
 
 /** Player is alive and participating */
@@ -88,6 +89,10 @@ public class Alive extends Participating {
     if (kwmm != null) {
       kwmm.giveDeadPlayerRewards(player);
     }
+
+    // Call when it is safe to apply extra kits
+    ParticipantKitApplyEvent kitEvent = new ParticipantKitApplyEvent(player);
+    player.getMatch().callEvent(kitEvent);
 
     player.getBukkit().updateInventory();
   }

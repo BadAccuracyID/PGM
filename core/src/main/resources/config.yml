@@ -31,6 +31,9 @@ map:
 
   # A path to a map pools file, or empty to disable map pools.
   pools: "map-pools.yml"
+  
+  # A path to the includes folder, or empty to disable map includes.
+  includes: "includes"
 
 # Sets the duration of various countdowns.
 #
@@ -69,7 +72,7 @@ gameplay:
 
 # Toggles various user interfaces.
 ui:
-  sidebar: true    # Enable the sidebar?
+  sidebar: true    # Enable the side bar?
   tablist: true    # Enable the tab list?
   ping: false      # Should tab list show real ping?
   proximity: false # Should the proximity of objectives be visible?
@@ -81,16 +84,16 @@ ui:
 stats:
   verbose: true   # Enable more detailed stats?
   show-after: 6s  # How long to wait after the match ends to show stats?
-  show-best: true # Should show the best players stats?
-  show-own: true  # Should show each player own stats?
+  show-best: true # Should show best players stats?
+  show-own: true  # Should show each players own stats?
   item-slot: 7    # In what slot should we place the verbose stats item?
 
-# Overrides the header and footer of the sidebar.
+# Overrides the header and footer of the side bar.
 sidebar:
   header: "" # A header, disabled if empty.
   footer: "" # A footer, disabled if empty.
   
-# Customize text displayed in the footer of the tab-list.
+# Customize text displayed in the footer of the tablist.
 # Color codes can be used ex. "&aHello World"  
 # To disable, set to an empty string.
 tablist:
@@ -110,7 +113,7 @@ tablist:
 # To disable, set to an empty string.
 motd: "{2}» &b{1} {2}«"
 
-# A list of player groups, defined in order of priority, with the highest on top.
+# A list of player groups, defined in order of priority, with highest on top.
 #
 # Each group is assigned the permission "pgm.group.<name>".
 groups:
@@ -130,7 +133,7 @@ groups:
     prefix-component: ""
     suffix-component: ""
 
-  # custom-group:
+  # customgroup:
   #   prefix: ""
   #   suffix: ""
   #   display-name: ""
@@ -177,13 +180,6 @@ groups:
     permissions:
       - "+pgm.premium"
 
-# Enables "community mode" with features such as /report, /freeze, /warn, and /ban.
-community:
-  enabled: true   # Is community mode enabled?
-  server-name: "" # Name of your server, displayed when players are kicked.
-  rules-link: ""  # A URL to a rules' website, displayed when players are kicked.
-  appeal-msg: ""  # A message, displayed on the kick screen, if a player is banned.
-
 # Overrides the default database uri.
 #
 # Only SQLite and MySQL-compatible databases officially supported.
@@ -196,5 +192,10 @@ database-uri: ""
 # Maximum connections a database will establish
 database-max-connections: 5
 
+# Enable the simple vanish manager, disable if you want other plugins to handle this
+vanish: true
+
 # Experimental features that are not yet stable.
-experiments: {}
+experiments:
+  # Enable payload preview. This is not fully finished and xml syntax is likely to change at a later time.
+  payload: false

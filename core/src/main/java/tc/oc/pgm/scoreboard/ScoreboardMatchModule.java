@@ -1,6 +1,6 @@
 package tc.oc.pgm.scoreboard;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -8,7 +8,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import javax.annotation.Nullable;
 import org.bukkit.ChatColor;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -17,6 +16,7 @@ import org.bukkit.scoreboard.NameTagVisibility;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchModule;
@@ -74,12 +74,12 @@ public class ScoreboardMatchModule implements MatchModule, Listener {
   protected void updatePartyScoreboardTeam(Party party, Team team, boolean forObservers) {
     match.getLogger().fine("Updating scoreboard team " + toString(team) + " for party " + party);
 
-    team.setDisplayName(TextTranslations.translateLegacy(party.getName(), null));
+    team.setDisplayName(TextTranslations.translateLegacy(party.getName()));
     team.setPrefix(party.getColor().toString());
     team.setSuffix(ChatColor.WHITE.toString());
 
     team.setCanSeeFriendlyInvisibles(true);
-    team.setAllowFriendlyFire(false);
+    team.setAllowFriendlyFire(match.getFriendlyFire());
 
     if (!forObservers && party instanceof Competitor) {
       NameTagVisibility nameTags = ((Competitor) party).getNameTagVisibility();
@@ -218,7 +218,7 @@ public class ScoreboardMatchModule implements MatchModule, Listener {
   }
 
   public Scoreboard getScoreboard(Party party) {
-    return checkNotNull(partyScoreboards.get(party));
+    return assertNotNull(partyScoreboards.get(party));
   }
 
   public void updatePartyScoreboardTeam(Party party) {

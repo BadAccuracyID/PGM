@@ -1,12 +1,13 @@
 package tc.oc.pgm.events;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static tc.oc.pgm.util.Assert.assertTrue;
 
-import javax.annotation.Nullable;
 import org.bukkit.event.HandlerList;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.party.Party;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.api.player.event.MatchPlayerEvent;
+import tc.oc.pgm.join.JoinRequest;
 
 /**
  * Called AFTER a player leaves and/or joins a party. Subclasses are called for more specific cases,
@@ -19,14 +20,16 @@ public class PlayerPartyChangeEvent extends MatchPlayerEvent {
 
   protected final @Nullable Party oldParty;
   protected final @Nullable Party newParty;
+  protected final JoinRequest request;
   protected boolean cancelled;
 
   public PlayerPartyChangeEvent(
-      MatchPlayer player, @Nullable Party oldParty, @Nullable Party newParty) {
+      MatchPlayer player, @Nullable Party oldParty, @Nullable Party newParty, JoinRequest request) {
     super(player);
-    checkArgument(oldParty != newParty);
+    assertTrue(oldParty != newParty);
     this.oldParty = oldParty;
     this.newParty = newParty;
+    this.request = request;
   }
 
   public @Nullable Party getOldParty() {
@@ -43,6 +46,10 @@ public class PlayerPartyChangeEvent extends MatchPlayerEvent {
 
   public boolean isParticipating() {
     return newParty != null && newParty.isParticipating();
+  }
+
+  public JoinRequest getRequest() {
+    return request;
   }
 
   private static final HandlerList handlers = new HandlerList();

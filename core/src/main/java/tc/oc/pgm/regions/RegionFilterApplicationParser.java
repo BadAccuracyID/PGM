@@ -15,11 +15,11 @@ import tc.oc.pgm.api.filter.Filter;
 import tc.oc.pgm.api.map.MapProtos;
 import tc.oc.pgm.api.map.factory.MapFactory;
 import tc.oc.pgm.api.region.Region;
-import tc.oc.pgm.filters.DenyFilter;
-import tc.oc.pgm.filters.FilterNode;
-import tc.oc.pgm.filters.FilterParser;
-import tc.oc.pgm.filters.StaticFilter;
-import tc.oc.pgm.filters.TeamFilter;
+import tc.oc.pgm.filters.matcher.StaticFilter;
+import tc.oc.pgm.filters.matcher.party.TeamFilter;
+import tc.oc.pgm.filters.operator.DenyFilter;
+import tc.oc.pgm.filters.operator.FilterNode;
+import tc.oc.pgm.filters.parse.FilterParser;
 import tc.oc.pgm.kits.Kit;
 import tc.oc.pgm.teams.Teams;
 import tc.oc.pgm.util.Version;
@@ -86,13 +86,8 @@ public class RegionFilterApplicationParser {
 
   public void parseMaxBuildHeight(Element el) throws InvalidXMLException {
     final Region region =
-        new CuboidRegion(
-            new Vector(
-                Double.NEGATIVE_INFINITY,
-                XMLUtils.parseNumber(el, Integer.class),
-                Double.NEGATIVE_INFINITY),
-            new Vector(
-                Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY));
+        new HalfspaceRegion(
+            new Vector(0, XMLUtils.parseNumber(el, Integer.class), 0), new Vector(0, 1, 0));
     final Component message = translatable("match.maxBuildHeight");
 
     for (RFAScope scope : Lists.newArrayList(RFAScope.BLOCK_PLACE)) {
@@ -132,7 +127,7 @@ public class RegionFilterApplicationParser {
     if (attrVelocity != null) {
       // Legacy support
       String velocityText = attrVelocity.getValue();
-      if (velocityText.charAt(0) == '@') velocityText = velocityText.substring(1);
+      if (velocityText.startsWith("@")) velocityText = velocityText.substring(1);
       Vector velocity = XMLUtils.parseVector(attrVelocity, velocityText);
       add(el, new RegionFilterApplication(RFAScope.EFFECT, region, effectFilter, velocity));
     }

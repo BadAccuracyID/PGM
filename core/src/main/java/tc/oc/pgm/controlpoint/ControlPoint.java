@@ -2,15 +2,18 @@ package tc.oc.pgm.controlpoint;
 
 import static net.kyori.adventure.key.Key.key;
 import static net.kyori.adventure.sound.Sound.sound;
+import static net.kyori.adventure.text.Component.text;
 
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import javax.annotation.Nullable;
 import net.kyori.adventure.sound.Sound;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.event.HandlerList;
 import org.bukkit.util.Vector;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchScope;
 import tc.oc.pgm.api.party.Competitor;
@@ -34,17 +37,17 @@ import tc.oc.pgm.util.collection.DefaultMapAdapter;
 public class ControlPoint extends SimpleGoal<ControlPointDefinition>
     implements IncrementalGoal<ControlPointDefinition> {
 
-  public static final ChatColor COLOR_NEUTRAL_TEAM = ChatColor.WHITE;
+  public static final TextColor COLOR_NEUTRAL_TEAM = NamedTextColor.WHITE;
 
-  public static final String SYMBOL_CP_INCOMPLETE = "\u29be"; // ⦾
-  public static final String SYMBOL_CP_COMPLETE = "\u29bf"; // ⦿
+  public static final Component SYMBOL_CP_INCOMPLETE = text("\u29be"); // ⦾
+  public static final Component SYMBOL_CP_COMPLETE = text("\u29bf"); // ⦿
 
   protected static final Sound GOOD_SOUND =
       sound(key("portal.travel"), Sound.Source.MASTER, 0.35f, 2f);
   protected static final Sound BAD_SOUND =
       sound(key("mob.blaze.death"), Sound.Source.MASTER, 0.4f, 0.8f);
 
-  protected final ControlPointPlayerTracker playerTracker;
+  protected final RegionPlayerTracker playerTracker;
   protected final ControlPointBlockDisplay blockDisplay;
 
   protected final Vector centerPoint;
@@ -75,9 +78,10 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
           match.needModule(TeamMatchModule.class).getTeam(this.definition.getInitialOwner());
     }
 
-    this.centerPoint = this.getCaptureRegion().getBounds().getCenterPoint();
+    Region capture = this.getCaptureRegion();
+    this.centerPoint = capture == null ? null : capture.getBounds().getCenterPoint();
 
-    this.playerTracker = new ControlPointPlayerTracker(match, this.getCaptureRegion());
+    this.playerTracker = new RegionPlayerTracker(match, this.getCaptureRegion());
 
     this.blockDisplay = new ControlPointBlockDisplay(match, this);
   }
@@ -98,7 +102,7 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
     return blockDisplay;
   }
 
-  public ControlPointPlayerTracker getPlayerTracker() {
+  public RegionPlayerTracker getPlayerTracker() {
     return playerTracker;
   }
 
@@ -182,22 +186,22 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
   }
 
   @Override
-  public ChatColor renderSidebarStatusColor(@Nullable Competitor competitor, Party viewer) {
-    return this.capturingTeam == null ? COLOR_NEUTRAL_TEAM : this.capturingTeam.getColor();
+  public TextColor renderSidebarStatusColor(@Nullable Competitor competitor, Party viewer) {
+    return this.capturingTeam == null ? COLOR_NEUTRAL_TEAM : this.capturingTeam.getTextColor();
   }
 
   @Override
-  public String renderSidebarStatusText(@Nullable Competitor competitor, Party viewer) {
+  public Component renderSidebarStatusText(@Nullable Competitor competitor, Party viewer) {
     if (Duration.ZERO.equals(this.capturingTime)) {
       return this.controllingTeam == null ? SYMBOL_CP_INCOMPLETE : SYMBOL_CP_COMPLETE;
     } else {
-      return this.renderCompletion();
+      return text(this.renderCompletion());
     }
   }
 
   @Override
-  public ChatColor renderSidebarLabelColor(@Nullable Competitor competitor, Party viewer) {
-    return this.controllingTeam == null ? COLOR_NEUTRAL_TEAM : this.controllingTeam.getColor();
+  public TextColor renderSidebarLabelColor(@Nullable Competitor competitor, Party viewer) {
+    return this.controllingTeam == null ? COLOR_NEUTRAL_TEAM : this.controllingTeam.getTextColor();
   }
 
   /** Ownership of the ControlPoint for a specific team given as a real number from 0 to 1. */
@@ -292,7 +296,7 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
     // team
     int defenderCount = 0;
 
-    for (MatchPlayer player : this.playerTracker.getPlayersOnPoint()) {
+    for (MatchPlayer player : this.playerTracker.getPlayers()) {
       Competitor team = player.getCompetitor();
       if (this.canDominate(player)) {
         defenderCount++;
@@ -336,9 +340,9 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
     }
 
     if (lead > 0) {
-      this.dominateAndFireEvents(leader, calculateDominateTime(lead, duration));
+      this.dominateAndFireEvents(leader, calculateDominateTime(lead, duration), false);
     } else {
-      this.dominateAndFireEvents(null, duration);
+      this.dominateAndFireEvents(null, duration, leader != null);
     }
   }
 
@@ -347,12 +351,13 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
    * team can be null, which means no team is dominating the point, which can cause the state to
    * change in some configurations.
    */
-  private void dominateAndFireEvents(@Nullable Competitor dominantTeam, Duration dominantTime) {
+  private void dominateAndFireEvents(
+      @Nullable Competitor dominantTeam, Duration dominantTime, boolean contested) {
     Duration oldCapturingTime = this.capturingTime;
     Competitor oldCapturingTeam = this.capturingTeam;
     Competitor oldControllingTeam = this.controllingTeam;
 
-    this.dominate(dominantTeam, dominantTime);
+    this.dominate(dominantTeam, dominantTime, contested);
 
     if (oldCapturingTeam != this.capturingTeam || !oldCapturingTime.equals(this.capturingTime)) {
       this.match.callEvent(new CapturingTimeChangeEvent(this.match, this));
@@ -404,7 +409,12 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
    * <p>If there is no neutral state, then the point is always either being captured by a specific
    * team, or not being captured at all.
    */
-  private void dominate(Competitor dominantTeam, Duration dominantTime) {
+  protected void dominate(Competitor dominantTeam, Duration dominantTime, boolean contested) {
+    if (dominantTeam != null && contested) {
+      throw new IllegalArgumentException(
+          "Control point cannot be contested if there is a dominant team.");
+    }
+
     if (!this.capturable || !TimeUtils.isLongerThan(dominantTime, Duration.ZERO)) {
       return;
     }
@@ -418,6 +428,9 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
       } else if (dominantTeam != null) {
         // non-owner is uncapturing the point
         uncapture(dominantTeam, dominantTime);
+      } else if (contested) {
+        // the point is contested, so use contested decay
+        contestedDecay(dominantTime);
       } else if (definition.getOwnedDecayRate() > 0) {
         // nobody on point so decay to neutral state
         ownedDecay(dominantTime);
@@ -433,6 +446,9 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
       } else if (dominantTeam != null) {
         // non-capturing team is dominate, so regress capturing team's progress
         recover(dominantTeam, dominantTime);
+      } else if (contested) {
+        // the point is contested, so use contested decay
+        contestedDecay(dominantTime);
       } else {
         // No team is dominating so decay
         decay(dominantTime);
@@ -443,7 +459,7 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
       // Point is not being captured and there is a dominant team that is not the owner, so they
       // start capturing
       this.capturingTeam = dominantTeam;
-      this.dominate(dominantTeam, dominantTime);
+      this.dominate(dominantTeam, dominantTime, contested);
     }
   }
 
@@ -486,7 +502,7 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
     dominantTime = addCaptureTime(dominantTime);
     if (dominantTime != null) {
       this.controllingTeam = null;
-      this.dominate(dominantTeam, dominantTime);
+      this.dominate(dominantTeam, dominantTime, false);
     }
   }
 
@@ -502,8 +518,19 @@ public class ControlPoint extends SimpleGoal<ControlPointDefinition>
         this.dominate(
             dominantTeam,
             Duration.ofMillis(
-                (long) ((1.0 / definition.getRecoveryRate()) * dominantTime.toMillis())));
+                (long) ((1.0 / definition.getRecoveryRate()) * dominantTime.toMillis())),
+            false);
       }
+    }
+  }
+
+  /** Point is being decayed back to its current state (Point is contested) */
+  private void contestedDecay(Duration dominantTime) {
+    dominantTime =
+        subtractCaptureTime(
+            Duration.ofMillis((long) (definition.getContestedRate() * dominantTime.toMillis())));
+    if (dominantTime != null) {
+      this.capturingTeam = null;
     }
   }
 

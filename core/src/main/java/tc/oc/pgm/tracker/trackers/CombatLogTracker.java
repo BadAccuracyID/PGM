@@ -7,7 +7,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import javax.annotation.Nullable;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -24,10 +23,12 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.events.PlayerParticipationStopEvent;
+import tc.oc.pgm.join.JoinRequest;
 import tc.oc.pgm.tracker.TrackerMatchModule;
 import tc.oc.pgm.util.material.Materials;
 
@@ -210,6 +211,7 @@ public class CombatLogTracker implements Listener {
   @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
   public void onParticipationStop(PlayerParticipationStopEvent event) {
     if (event.getMatch().isRunning()
+        && !event.getRequest().has(JoinRequest.Flag.FORCE)
         && this.getImminentDeath(event.getPlayer().getBukkit()) != null) {
       event.cancel(translatable("leave.err.combatLog"));
       event.setCancelled(true);

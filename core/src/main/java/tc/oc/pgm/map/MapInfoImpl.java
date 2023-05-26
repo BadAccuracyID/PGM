@@ -1,28 +1,32 @@
 package tc.oc.pgm.map;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static net.kyori.adventure.text.Component.text;
 import static net.kyori.adventure.text.Component.translatable;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
+import java.lang.ref.SoftReference;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.bukkit.Difficulty;
 import org.jdom2.Element;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.map.Contributor;
 import tc.oc.pgm.api.map.Gamemode;
+import tc.oc.pgm.api.map.MapContext;
 import tc.oc.pgm.api.map.MapInfo;
+import tc.oc.pgm.api.map.MapSource;
 import tc.oc.pgm.api.map.MapTag;
 import tc.oc.pgm.api.map.Phase;
 import tc.oc.pgm.api.map.WorldInfo;
 import tc.oc.pgm.map.contrib.PlayerContributor;
 import tc.oc.pgm.map.contrib.PseudonymContributor;
+import tc.oc.pgm.util.StringUtils;
 import tc.oc.pgm.util.Version;
 import tc.oc.pgm.util.named.MapNameStyle;
 import tc.oc.pgm.util.named.NameStyle;
@@ -32,11 +36,15 @@ import tc.oc.pgm.util.xml.Node;
 import tc.oc.pgm.util.xml.XMLUtils;
 
 public class MapInfoImpl implements MapInfo {
+  private final MapSource source;
+
   private final String id;
+  private final String variant;
   private final Version proto;
   private final Version version;
   private final Phase phase;
   private final String name;
+  private final String normalizedName;
   private final String description;
   private final LocalDate created;
   private final Collection<Contributor> authors;
@@ -45,95 +53,77 @@ public class MapInfoImpl implements MapInfo {
   private final Component gamemode;
   private final int difficulty;
   private final WorldInfo world;
+  private final boolean friendlyFire;
 
   protected final Collection<MapTag> tags;
   protected final Collection<Integer> players;
   protected final Collection<Gamemode> gamemodes;
 
-  public MapInfoImpl(
-      @Nullable String id,
-      Version proto,
-      Version version,
-      String name,
-      String description,
-      @Nullable LocalDate created,
-      @Nullable Collection<Contributor> authors,
-      @Nullable Collection<Contributor> contributors,
-      @Nullable Collection<String> rules,
-      @Nullable Integer difficulty,
-      @Nullable Collection<MapTag> tags,
-      @Nullable Collection<Integer> players,
-      @Nullable WorldInfo world,
-      @Nullable Component gamemode,
-      @Nullable Collection<Gamemode> gamemodes,
-      Phase phase) {
-    this.name = checkNotNull(name);
-    this.id = checkNotNull(MapInfo.normalizeName(id == null ? name : id));
-    this.proto = checkNotNull(proto);
-    this.version = checkNotNull(version);
-    this.description = checkNotNull(description);
-    this.created = created;
-    this.authors = authors == null ? new LinkedList<>() : authors;
-    this.contributors = contributors == null ? new LinkedList<>() : contributors;
-    this.rules = rules == null ? new LinkedList<>() : rules;
-    this.difficulty = difficulty == null ? Difficulty.NORMAL.ordinal() : difficulty;
-    this.tags = tags == null ? new TreeSet<>() : tags;
-    this.players = players == null ? new LinkedList<>() : players;
-    this.world = world == null ? new WorldInfoImpl() : world;
-    this.gamemode = gamemode;
-    this.gamemodes = gamemodes;
-    this.phase = phase;
-  }
+  protected SoftReference<MapContext> context;
 
-  public MapInfoImpl(MapInfo info) {
-    this(
-        checkNotNull(info).getId(),
-        info.getProto(),
-        info.getVersion(),
-        info.getName(),
-        info.getDescription(),
-        info.getCreated(),
-        info.getAuthors(),
-        info.getContributors(),
-        info.getRules(),
-        info.getDifficulty(),
-        info.getTags(),
-        info.getMaxPlayers(),
-        info.getWorld(),
-        info.getGamemode(),
-        info.getGamemodes(),
-        info.getPhase());
-  }
+  public MapInfoImpl(MapSource source, Element root) throws InvalidXMLException {
+    this.source = source;
+    this.variant = source.getVariant();
 
-  public MapInfoImpl(Element root) throws InvalidXMLException {
-    this(
-        checkNotNull(root).getChildTextNormalize("slug"),
-        XMLUtils.parseSemanticVersion(Node.fromRequiredAttr(root, "proto")),
-        XMLUtils.parseSemanticVersion(Node.fromRequiredChildOrAttr(root, "version")),
-        Node.fromRequiredChildOrAttr(root, "name").getValueNormalize(),
-        Node.fromRequiredChildOrAttr(root, "objective", "description").getValueNormalize(),
-        XMLUtils.parseDate(Node.fromChildOrAttr(root, "created")),
-        parseContributors(root, "author"),
-        parseContributors(root, "contributor"),
-        parseRules(root),
+    String tmpName = assertNotNull(Node.fromRequiredChildOrAttr(root, "name").getValueNormalize());
+    if (variant != null) {
+      Element variantEl =
+          root.getChildren("variant").stream()
+              .filter(el -> Objects.equals(variant, el.getAttributeValue("id")))
+              .findFirst()
+              .orElseThrow(
+                  () -> new InvalidXMLException("Could not find variant definition", root));
+
+      boolean override = XMLUtils.parseBoolean(Node.fromAttr(variantEl, "override"), false);
+      tmpName = (override ? "" : tmpName + ": ") + variantEl.getTextNormalize();
+    }
+
+    this.name = tmpName;
+    this.normalizedName = StringUtils.normalize(name);
+
+    String slug = assertNotNull(root).getChildTextNormalize("slug");
+    if (slug != null && variant != null) slug += "_" + variant;
+
+    this.id = assertNotNull(StringUtils.slugify(slug != null ? slug : name));
+
+    this.proto = assertNotNull(XMLUtils.parseSemanticVersion(Node.fromRequiredAttr(root, "proto")));
+    this.version =
+        assertNotNull(XMLUtils.parseSemanticVersion(Node.fromRequiredChildOrAttr(root, "version")));
+    this.description =
+        assertNotNull(
+            Node.fromRequiredChildOrAttr(root, "objective", "description").getValueNormalize());
+    this.created = XMLUtils.parseDate(Node.fromChildOrAttr(root, "created"));
+    this.authors = parseContributors(root, "author");
+    this.contributors = parseContributors(root, "contributor");
+    this.rules = parseRules(root);
+    this.difficulty =
         XMLUtils.parseEnum(
                 Node.fromLastChildOrAttr(root, "difficulty"),
                 Difficulty.class,
                 "difficulty",
                 Difficulty.NORMAL)
-            .ordinal(),
-        null,
-        null,
-        parseWorld(root),
-        XMLUtils.parseFormattedText(root, "game"),
-        parseGamemodes(root),
+            .ordinal();
+    this.tags = new TreeSet<>();
+    this.players = new ArrayList<>();
+    this.world = parseWorld(root);
+    this.gamemode = XMLUtils.parseFormattedText(root, "game");
+    this.gamemodes = parseGamemodes(root);
+    this.phase =
         XMLUtils.parseEnum(
-            Node.fromLastChildOrAttr(root, "phase"), Phase.class, "phase", Phase.PRODUCTION));
+            Node.fromLastChildOrAttr(root, "phase"), Phase.class, "phase", Phase.PRODUCTION);
+    this.friendlyFire =
+        XMLUtils.parseBoolean(
+            Node.fromLastChildOrAttr(root, "friendlyfire", "friendly-fire"), false);
   }
 
   @Override
   public String getId() {
     return id;
+  }
+
+  @Override
+  public String getVariant() {
+    return variant;
   }
 
   @Override
@@ -149,6 +139,11 @@ public class MapInfoImpl implements MapInfo {
   @Override
   public String getName() {
     return name;
+  }
+
+  @Override
+  public String getNormalizedName() {
+    return normalizedName;
   }
 
   @Override
@@ -212,6 +207,11 @@ public class MapInfoImpl implements MapInfo {
   }
 
   @Override
+  public boolean getFriendlyFire() {
+    return friendlyFire;
+  }
+
+  @Override
   public int hashCode() {
     return getId().hashCode();
   }
@@ -224,12 +224,17 @@ public class MapInfoImpl implements MapInfo {
 
   @Override
   public String toString() {
-    return new ToStringBuilder(this).append("id", getId()).build();
+    return "MapInfo{id=" + this.id + ", version=" + this.version + "}";
   }
 
   @Override
-  public MapInfo clone() {
-    return new MapInfoImpl(this);
+  public MapSource getSource() {
+    return source;
+  }
+
+  @Override
+  public @Nullable MapContext getContext() {
+    return context != null ? context.get() : null;
   }
 
   @Override
@@ -253,20 +258,17 @@ public class MapInfoImpl implements MapInfo {
     return name.build();
   }
 
-  private static List<String> parseRules(Element root) {
-    List<String> rules = null;
+  private static @NotNull List<String> parseRules(Element root) {
+    List<String> rules = new ArrayList<>();
     for (Element parent : root.getChildren("rules")) {
       for (Element rule : parent.getChildren("rule")) {
-        if (rules == null) {
-          rules = new LinkedList<>();
-        }
         rules.add(rule.getTextNormalize());
       }
     }
     return rules;
   }
 
-  private static List<Gamemode> parseGamemodes(Element root) throws InvalidXMLException {
+  private static @NotNull List<Gamemode> parseGamemodes(Element root) throws InvalidXMLException {
     List<Gamemode> gamemodes = new ArrayList<>();
     for (Element gamemodeEl : root.getChildren("gamemode")) {
       Gamemode gm = Gamemode.byId(gamemodeEl.getText());
@@ -276,9 +278,9 @@ public class MapInfoImpl implements MapInfo {
     return gamemodes;
   }
 
-  private static List<Contributor> parseContributors(Element root, String tag)
+  private static @NotNull List<Contributor> parseContributors(Element root, String tag)
       throws InvalidXMLException {
-    List<Contributor> contributors = null;
+    List<Contributor> contributors = new ArrayList<>();
     for (Element parent : root.getChildren(tag + "s")) {
       for (Element child : parent.getChildren(tag)) {
         String name = XMLUtils.getNormalizedNullableText(child);
@@ -287,10 +289,6 @@ public class MapInfoImpl implements MapInfo {
 
         if (name == null && uuid == null) {
           throw new InvalidXMLException("Contributor must have either a name or UUID", child);
-        }
-
-        if (contributors == null) {
-          contributors = new LinkedList<>();
         }
 
         if (uuid == null) {
@@ -303,7 +301,7 @@ public class MapInfoImpl implements MapInfo {
     return contributors;
   }
 
-  private static WorldInfo parseWorld(Element root) throws InvalidXMLException {
+  private static @NotNull WorldInfo parseWorld(Element root) throws InvalidXMLException {
     final Element world = root.getChild("terrain");
     return world == null ? new WorldInfoImpl() : new WorldInfoImpl(world);
   }

@@ -1,13 +1,14 @@
 package tc.oc.pgm.filters.query;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import java.util.UUID;
-import javax.annotation.Nullable;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
+import org.bukkit.inventory.Inventory;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.filter.query.PlayerQuery;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.party.Party;
@@ -24,7 +25,7 @@ public class PlayerStateQuery extends Query implements PlayerQuery {
 
   public PlayerStateQuery(@Nullable Event event, MatchPlayerState playerState) {
     super(event);
-    this.playerState = checkNotNull(playerState);
+    this.playerState = assertNotNull(playerState);
   }
 
   @Override
@@ -55,6 +56,12 @@ public class PlayerStateQuery extends Query implements PlayerQuery {
   @Override
   public Location getLocation() {
     return playerState.getLocation();
+  }
+
+  @Nullable
+  @Override
+  public Inventory getInventory() {
+    return this.playerState.getPlayer().map(MatchPlayer::getInventory).orElse(null);
   }
 
   @Override

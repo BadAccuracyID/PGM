@@ -10,16 +10,19 @@ import java.util.Set;
 public enum NameStyle {
   // No formatting
   PLAIN(EnumSet.noneOf(Flag.class)),
+  // Simple formatting, just team color. Used for non-clickable places
+  SIMPLE_COLOR(EnumSet.of(Flag.COLOR)),
   // Simple formatting, just team color & teleport
   COLOR(EnumSet.of(Flag.COLOR, Flag.TELEPORT)),
   // Fancy formatting, flairs, color and click to teleport
-  FANCY(EnumSet.of(Flag.COLOR, Flag.FLAIR, Flag.TELEPORT, Flag.DISGUISE_OFFLINE)),
+  FANCY(EnumSet.of(Flag.COLOR, Flag.FLAIR, Flag.FRIEND, Flag.DISGUISE, Flag.TELEPORT)),
   // Tab list format, flairs, color, death status, self, etc
-  TAB(EnumSet.of(Flag.COLOR, Flag.FLAIR, Flag.SELF, Flag.DISGUISE, Flag.DEATH)),
-  // Fancy plus allowing disguised status reveal
-  VERBOSE(EnumSet.of(Flag.COLOR, Flag.FLAIR, Flag.TELEPORT, Flag.DISGUISE)),
-  // Fancy without teleport
-  CONCISE(EnumSet.of(Flag.COLOR, Flag.FLAIR, Flag.TELEPORT));
+  TAB(
+      EnumSet.of(
+          Flag.COLOR, Flag.FLAIR, Flag.SELF, Flag.FRIEND, Flag.SQUAD, Flag.DISGUISE, Flag.DEATH)),
+  // Fancy plus full nickname
+  VERBOSE(
+      EnumSet.of(Flag.COLOR, Flag.FLAIR, Flag.FRIEND, Flag.DISGUISE, Flag.NICKNAME, Flag.TELEPORT));
 
   private final Set<Flag> flags;
 
@@ -33,11 +36,13 @@ public enum NameStyle {
 
   public enum Flag {
     COLOR, // Color
-    FLAIR, // Show flair (prefix & suffix)
+    FLAIR, // Show flair
     SELF, // Bold if self
-    DISGUISE, // Strikethrough if disguised (vanish/nick)
-    DISGUISE_OFFLINE, // Appear offline if disguised (vanish/nick)
+    FRIEND, // Italic if friend
+    SQUAD, // Underline if in the same squad
+    DISGUISE, // Strikethrough if disguised
+    NICKNAME, // Show nickname after real name
     DEATH, // Grey out name if dead
-    TELEPORT // Click name to teleport
+    TELEPORT, // Click name to teleport
   }
 }

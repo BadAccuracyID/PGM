@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
-import javax.annotation.Nullable;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -51,6 +50,7 @@ import org.bukkit.material.PistonExtensionMaterial;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.event.BlockTransformEvent;
 import tc.oc.pgm.api.match.Match;
@@ -200,7 +200,7 @@ public class BlockTransformListener implements Listener {
         handleDoor(event, (Door) newData);
       }
     }
-    logger.fine("Generated event " + event);
+    logger.finest("Generated event " + event);
     currentEvents.put(event.getCause(), event);
   }
 
@@ -303,6 +303,23 @@ public class BlockTransformListener implements Listener {
       if (isWater(oldState.getType()) && isLava(newState.getType())) {
         newState.setType(event.getFace() == BlockFace.DOWN ? Material.STONE : Material.COBBLESTONE);
         newState.setRawData((byte) 0);
+      }
+
+      // For some reason, the newState has the data value of the old source.
+      // This corrects for that manually.
+      if (isWater(newState.getType()) || isLava(newState.getType())) {
+        byte oldData = newState.getRawData();
+        if (event.getFace() == BlockFace.DOWN) {
+          // A data value of 8 (or higher) represents water flowing down
+          newState.setRawData((byte) (8));
+        } else if (oldData < 7) {
+          // Data values 0-7 represent water on the ground, and increase by 1 as they spread
+          newState.setRawData((byte) (oldData + 1));
+        } else {
+          // Otherwise, the previous block must have been flowing down, so it spreads to a data
+          // value of 1
+          newState.setRawData((byte) (1));
+        }
       }
 
       // Check for lava ownership

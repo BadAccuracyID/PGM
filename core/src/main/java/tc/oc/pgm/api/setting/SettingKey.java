@@ -1,22 +1,24 @@
 package tc.oc.pgm.api.setting;
 
-import static com.google.common.base.Preconditions.*;
 import static tc.oc.pgm.api.setting.SettingValue.*;
 
 import com.google.common.collect.ImmutableList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import org.bukkit.Material;
+import org.jetbrains.annotations.NotNull;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.modules.PlayerTimeMatchModule;
+import tc.oc.pgm.util.Aliased;
 
 /**
  * A toggleable setting with various possible {@link SettingValue}s.
  *
  * @see SettingValue
  */
-public enum SettingKey {
+public enum SettingKey implements Aliased {
   CHAT(
       "chat",
       Material.SIGN,
@@ -27,7 +29,8 @@ public enum SettingKey {
       Arrays.asList("death", "dms"),
       Material.SKULL_ITEM,
       DEATH_ALL,
-      DEATH_OWN), // Changes which death messages are seen
+      DEATH_OWN,
+      DEATH_FRIENDS), // Changes which death messages are seen
   PICKER(
       "picker",
       Material.LEATHER_HELMET,
@@ -38,13 +41,20 @@ public enum SettingKey {
       Arrays.asList("join", "jms"),
       Material.WOOD_DOOR,
       JOIN_ON,
+      JOIN_FRIENDS,
       JOIN_OFF), // Changes if join messages are seen
   MESSAGE(
       Arrays.asList("message", "dm"),
       Material.BOOK_AND_QUILL,
       MESSAGE_ON,
+      MESSAGE_FRIEND,
       MESSAGE_OFF), // Changes if direct messages are accepted
-  OBSERVERS(Arrays.asList("observers", "obs"), Material.EYE_OF_ENDER, OBSERVERS_ON, OBSERVERS_OFF) {
+  OBSERVERS(
+      Arrays.asList("observers", "obs"),
+      Material.EYE_OF_ENDER,
+      OBSERVERS_ON,
+      OBSERVERS_FRIEND,
+      OBSERVERS_OFF) {
     @Override
     public void update(MatchPlayer player) {
       player.resetVisibility();
@@ -84,7 +94,6 @@ public enum SettingKey {
   }
 
   SettingKey(List<String> aliases, Material icon, SettingValue... values) {
-    checkArgument(!aliases.isEmpty(), "aliases is empty");
     this.aliases = ImmutableList.copyOf(aliases);
     this.icon = icon;
     this.values = values;
@@ -108,10 +117,16 @@ public enum SettingKey {
     return aliases;
   }
 
+  @NotNull
+  @Override
+  public Iterator<String> iterator() {
+    return aliases.iterator();
+  }
+
   /**
    * Get a list of the possible {@link SettingValue}s.
    *
-   * @return A array of {@link SettingValue}s, sorted by defined order.
+   * @return An array of {@link SettingValue}s, sorted by defined order.
    */
   public SettingValue[] getPossibleValues() {
     return values;

@@ -9,15 +9,17 @@ import static net.kyori.adventure.text.Component.translatable;
 import static net.kyori.adventure.title.Title.title;
 import static tc.oc.pgm.util.TimeUtils.fromTicks;
 
+import com.google.common.collect.Iterables;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.Title;
-import net.md_5.bungee.api.ChatColor;
+import org.bukkit.ChatColor;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -69,31 +71,36 @@ public class MatchAnnouncer implements Listener {
 
   @EventHandler(priority = EventPriority.MONITOR)
   public void onMatchEnd(final MatchFinishEvent event) {
-    Match match = event.getMatch();
+    final Match match = event.getMatch();
 
     // broadcast match finish message
     for (MatchPlayer viewer : match.getPlayers()) {
-      Component title, subtitle = empty();
-      if (event.getWinner() == null) {
+      Component title = null, subtitle = empty();
+      final Collection<Competitor> winners = event.getWinners();
+      final boolean singleWinner = winners.size() == 1;
+      if (winners.isEmpty()) {
         title = translatable("broadcast.gameOver");
       } else {
-        title =
-            translatable(
-                event.getWinner().isNamePlural()
-                    ? "broadcast.gameOver.teamWinners"
-                    : "broadcast.gameOver.teamWinner",
-                event.getWinner().getName());
+        if (singleWinner) {
+          title =
+              translatable(
+                  Iterables.getOnlyElement(winners).isNamePlural()
+                      ? "broadcast.gameOver.teamWinners"
+                      : "broadcast.gameOver.teamWinner",
+                  TextFormatter.nameList(winners, NameStyle.FANCY, NamedTextColor.WHITE));
+        }
 
-        if (event.getWinner() == viewer.getParty()) {
+        // Use stream here instead of #contains to avoid unchecked cast
+        if (winners.stream().anyMatch(w -> w == viewer.getParty())) {
           // Winner
           viewer.playSound(SOUND_MATCH_WIN);
-          if (viewer.getParty() instanceof Team) {
+          if (singleWinner && viewer.getParty() instanceof Team) {
             subtitle = translatable("broadcast.gameOver.teamWon", NamedTextColor.GREEN);
           }
         } else if (viewer.getParty() instanceof Competitor) {
           // Loser
           viewer.playSound(SOUND_MATCH_LOSE);
-          if (viewer.getParty() instanceof Team) {
+          if (singleWinner && viewer.getParty() instanceof Team) {
             subtitle = translatable("broadcast.gameOver.teamLost", NamedTextColor.RED);
           }
         } else {
@@ -102,28 +109,41 @@ public class MatchAnnouncer implements Listener {
         }
       }
 
-      viewer.showTitle(
-          title(title, subtitle, Title.Times.of(Duration.ZERO, fromTicks(40), fromTicks(40))));
+      if (title == null) {
+        // 2 or more winners, show "Tied!" as the title
+        title = translatable("broadcast.gameOver.tied", NamedTextColor.YELLOW);
+
+        // If 2 or 3 winners we show the winners as the subtitle
+        if (winners.size() <= 3) {
+          subtitle = TextFormatter.nameList(winners, NameStyle.FANCY, NamedTextColor.WHITE);
+        }
+      }
+
+      final Title.Times titleTimes = Title.Times.times(Duration.ZERO, fromTicks(40), fromTicks(40));
+      viewer.showTitle(title(title, subtitle, titleTimes));
+
       viewer.sendMessage(title);
-      if (viewer.getParty() instanceof Competitor) viewer.sendMessage(subtitle);
+
+      if (viewer.getParty() instanceof Competitor || !singleWinner) viewer.sendMessage(subtitle);
     }
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void clearTitle(PlayerJoinMatchEvent event) {
     MatchPlayer player = event.getPlayer();
+    Match match = event.getMatch();
+    List<Component> extraLines = event.getExtraLines();
 
     player.clearTitle();
 
     // Bukkit assumes a player's locale is "en_US" before it receives a player's setting packet.
     // Thus, we delay sending this prominent message, so it is more likely its in the right locale.
-    player
-        .getMatch()
+    match
         .getExecutor(MatchScope.LOADED)
-        .schedule(() -> sendWelcomeMessage(event.getPlayer()), 500, TimeUnit.MILLISECONDS);
+        .schedule(() -> sendWelcomeMessage(player, extraLines), 500, TimeUnit.MILLISECONDS);
   }
 
-  private void sendWelcomeMessage(MatchPlayer viewer) {
+  public void sendWelcomeMessage(MatchPlayer viewer, List<Component> extraLines) {
     MapInfo mapInfo = viewer.getMatch().getMap();
 
     Component title = text(mapInfo.getName(), NamedTextColor.AQUA, TextDecoration.BOLD);
@@ -142,6 +162,11 @@ public class MatchAnnouncer implements Listener {
                       "misc.createdBy",
                       NamedTextColor.GRAY,
                       TextFormatter.nameList(authors, NameStyle.FANCY, NamedTextColor.GRAY))));
+    }
+
+    // Send extra info from other plugins
+    for (Component extra : extraLines) {
+      viewer.sendMessage(extra);
     }
 
     viewer.sendMessage(TextFormatter.horizontalLine(NamedTextColor.WHITE, 200));

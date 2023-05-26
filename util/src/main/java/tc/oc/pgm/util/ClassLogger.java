@@ -5,7 +5,7 @@ import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Logger that is created by giving it a class and an explicit parent logger. The name of the logger
@@ -113,6 +113,17 @@ public final class ClassLogger extends Logger {
     this.setLevel(null);
   }
 
+  public Level getEffectiveLevel() {
+    Level level = this.getLevel();
+    Logger someParent = this.getParent();
+    while (level == null) {
+      level = someParent.getLevel();
+      someParent = someParent.getParent();
+    }
+
+    return level;
+  }
+
   @Override
   public void log(LogRecord record) {
     record.setMessage(this.prefix + record.getMessage());
@@ -121,7 +132,7 @@ public final class ClassLogger extends Logger {
     // Check the level ourselves and then promote the record
     // to make sure it gets through.
     if (record.getLevel().intValue() < Level.INFO.intValue()
-        && record.getLevel().intValue() >= this.getLevel().intValue()) {
+        && record.getLevel().intValue() >= this.getEffectiveLevel().intValue()) {
 
       record.setLevel(Level.INFO);
     }

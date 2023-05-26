@@ -1,22 +1,20 @@
 package tc.oc.pgm.match;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static tc.oc.pgm.util.text.PlayerComponent.player;
+import static tc.oc.pgm.util.Assert.assertNotNull;
+import static tc.oc.pgm.util.player.PlayerComponent.player;
 
 import java.lang.ref.WeakReference;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
-import org.apache.commons.lang3.builder.CompareToBuilder;
-import org.apache.commons.lang3.builder.EqualsBuilder;
-import org.apache.commons.lang3.builder.HashCodeBuilder;
-import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -26,9 +24,13 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.util.Vector;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.Permissions;
 import tc.oc.pgm.api.filter.query.PlayerQuery;
+import tc.oc.pgm.api.integration.Integration;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchScope;
 import tc.oc.pgm.api.party.Competitor;
@@ -41,7 +43,7 @@ import tc.oc.pgm.api.setting.SettingValue;
 import tc.oc.pgm.api.setting.Settings;
 import tc.oc.pgm.api.time.Tick;
 import tc.oc.pgm.events.PlayerResetEvent;
-import tc.oc.pgm.filters.dynamic.Filterable;
+import tc.oc.pgm.filters.Filterable;
 import tc.oc.pgm.kits.Kit;
 import tc.oc.pgm.kits.MaxHealthKit;
 import tc.oc.pgm.kits.WalkSpeedKit;
@@ -49,7 +51,11 @@ import tc.oc.pgm.modules.SpectateMatchModule;
 import tc.oc.pgm.util.Audience;
 import tc.oc.pgm.util.ClassLogger;
 import tc.oc.pgm.util.TimeUtils;
-import tc.oc.pgm.util.attribute.*;
+import tc.oc.pgm.util.attribute.Attribute;
+import tc.oc.pgm.util.attribute.AttributeInstance;
+import tc.oc.pgm.util.attribute.AttributeMap;
+import tc.oc.pgm.util.attribute.AttributeMapImpl;
+import tc.oc.pgm.util.attribute.AttributeModifier;
 import tc.oc.pgm.util.bukkit.ViaUtils;
 import tc.oc.pgm.util.named.NameStyle;
 import tc.oc.pgm.util.nms.NMSHacks;
@@ -73,13 +79,12 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
   private final AtomicBoolean visible;
   private final AtomicBoolean protocolReady;
   private final AtomicInteger protocolVersion;
-  private final AtomicBoolean vanished;
   private final AttributeMap attributeMap;
 
   public MatchPlayerImpl(Match match, Player player) {
     this.logger =
         ClassLogger.get(
-            checkNotNull(match).getLogger(), getClass(), checkNotNull(player).getName());
+            assertNotNull(match).getLogger(), getClass(), assertNotNull(player).getName());
     this.match = match;
     this.id = player.getUniqueId();
     this.bukkit = new WeakReference<>(player);
@@ -88,7 +93,6 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
     this.frozen = new AtomicBoolean(false);
     this.dead = new AtomicBoolean(false);
     this.visible = new AtomicBoolean(false);
-    this.vanished = new AtomicBoolean(false);
     this.protocolReady = new AtomicBoolean(ViaUtils.isReady(player));
     this.protocolVersion = new AtomicInteger(ViaUtils.getProtocolVersion(player));
     this.attributeMap = new AttributeMapImpl(player);
@@ -188,14 +192,6 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
   }
 
   @Override
-  public boolean isVanished() {
-    Player player = getBukkit();
-    if (player == null) return false;
-
-    return player.hasMetadata("vanished");
-  }
-
-  @Override
   public boolean canInteract() {
     return isAlive() && !isFrozen();
   }
@@ -207,9 +203,13 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
         spectatorTarget != null && spectatorTarget.getId().equals(other.getId());
     if (!other.isVisible() && !isSpectatorTarget) return false;
     if (other.isParticipating()) return true;
-    if (other.isVanished() && !getBukkit().hasPermission(Permissions.VANISH)) return false;
-    return isObserving()
-        && getSettings().getValue(SettingKey.OBSERVERS) == SettingValue.OBSERVERS_ON;
+    if (Integration.isVanished(other.getBukkit()) && !getBukkit().hasPermission(Permissions.VANISH))
+      return false;
+    SettingValue setting = getSettings().getValue(SettingKey.OBSERVERS);
+    boolean friendsOnly =
+        Integration.isFriend(getBukkit(), other.getBukkit())
+            && setting == SettingValue.OBSERVERS_FRIEND;
+    return isObserving() && (setting == SettingValue.OBSERVERS_ON || friendsOnly);
   }
 
   @Override
@@ -278,6 +278,7 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
     bukkit.setWalkSpeed(WalkSpeedKit.BUKKIT_DEFAULT);
     NMSHacks.clearArrowsInPlayer(bukkit);
     NMSHacks.setKnockbackReduction(bukkit, 0);
+    bukkit.setVelocity(new Vector());
 
     for (PotionEffect effect : bukkit.getActivePotionEffects()) {
       if (effect.getType() != null) {
@@ -339,11 +340,6 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
     getBukkit().setGameMode(gameMode);
   }
 
-  @Override
-  public void setVanished(boolean yes) {
-    vanished.set(yes);
-  }
-
   /**
    * When max health is lowered by an item attribute or potion effect, the client can go into an
    * inconsistent state that has strange effects, like the death animation playing when the player
@@ -359,8 +355,13 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
   public void applyKit(Kit kit, boolean force) {
     List<ItemStack> displacedItems = new ArrayList<>();
     kit.apply(this, force, displacedItems);
-    for (ItemStack stack : displacedItems) {
-      getInventory().addItem(stack);
+
+    if (displacedItems.size() > 0) {
+      Collection<ItemStack> leftover =
+          getInventory().addItem(displacedItems.toArray(new ItemStack[0])).values();
+      if (leftover.size() > 0) {
+        kit.applyLeftover(this, new ArrayList<>(leftover));
+      }
     }
 
     match
@@ -407,7 +408,7 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
 
   @Override
   public Component getName(NameStyle style) {
-    return player(getBukkit(), style);
+    return player(this, style);
   }
 
   @Override
@@ -444,7 +445,7 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
   }
 
   @Override
-  public @Nonnull Audience audience() {
+  public @NotNull Audience audience() {
     return audience;
   }
 
@@ -473,33 +474,37 @@ public class MatchPlayerImpl implements MatchPlayer, Comparable<MatchPlayer> {
 
   @Override
   public int compareTo(MatchPlayer o) {
-    return new CompareToBuilder()
-        .append(getMatch(), o.getMatch())
-        .append(this.getId(), o.getId())
-        .build();
+    final int diff = this.id.compareTo(o.getId());
+    if (diff == 0) {
+      return this.match.getId().compareTo(o.getMatch().getId());
+    }
+    return diff;
   }
 
   @Override
   public int hashCode() {
-    return new HashCodeBuilder().append(getMatch()).append(this.getId()).build();
+    int hash = 7;
+    hash = 31 * hash + this.id.hashCode();
+    hash = 31 * hash + this.match.hashCode();
+    return hash;
   }
 
   @Override
   public boolean equals(Object obj) {
     if (!(obj instanceof MatchPlayer)) return false;
     final MatchPlayer o = (MatchPlayer) obj;
-    return new EqualsBuilder()
-        .append(getMatch(), o.getMatch())
-        .append(this.getId(), o.getId())
-        .isEquals();
+    return this.id.equals(o.getId()) && this.match.equals(o.getMatch());
   }
 
   @Override
   public String toString() {
-    return new ToStringBuilder(this)
-        .append("id", this.getId())
-        .append("bukkit", getBukkit())
-        .append("match", getMatch().getId())
-        .build();
+    final Player player = this.getBukkit();
+    return "MatchPlayer{id="
+        + this.id
+        + ", player="
+        + (player == null ? "<null>" : player.getName())
+        + ", match="
+        + this.match.getId()
+        + "}";
   }
 }

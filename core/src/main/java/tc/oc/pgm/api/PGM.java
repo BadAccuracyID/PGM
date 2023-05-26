@@ -1,17 +1,16 @@
 package tc.oc.pgm.api;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import fr.minuskube.inv.InventoryManager;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.map.MapLibrary;
 import tc.oc.pgm.api.map.MapOrder;
 import tc.oc.pgm.api.match.MatchManager;
-import tc.oc.pgm.api.player.VanishManager;
 import tc.oc.pgm.namedecorations.NameDecorationRegistry;
 import tc.oc.pgm.tablist.MatchTabManager;
 
@@ -39,8 +38,6 @@ public interface PGM extends Plugin {
 
   ScheduledExecutorService getAsyncExecutor();
 
-  VanishManager getVanishManager();
-
   InventoryManager getInventoryManager();
 
   AtomicReference<PGM> GLOBAL = new AtomicReference<>(null);
@@ -50,7 +47,7 @@ public interface PGM extends Plugin {
       get();
       throw new IllegalArgumentException("PGM was already initialized!");
     } catch (IllegalStateException e) {
-      GLOBAL.set(checkNotNull(pgm, "PGM cannot be null!"));
+      GLOBAL.set(assertNotNull(pgm, "PGM cannot be null!"));
     }
     return get();
   }

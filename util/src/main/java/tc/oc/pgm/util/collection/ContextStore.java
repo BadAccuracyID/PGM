@@ -79,12 +79,28 @@ public class ContextStore<T> implements Iterable<Map.Entry<String, T>> {
     return null;
   }
 
+  /**
+   * Gets an object by the id it was registered with as {@code type}.
+   *
+   * @param id id to look up.
+   * @param type the type to return this object as
+   * @return Object that was registered to the given id cast to {@code type}. Is null if the cast
+   *     fails or if none exists
+   */
+  public <C extends T> C get(String id, Class<C> type) {
+    try {
+      return type.cast(this.get(id));
+    } catch (ClassCastException e) {
+      return null;
+    }
+  }
+
   public Collection<T> getAll() {
     return this.store.values();
   }
 
   @SuppressWarnings("unchecked")
-  public <V extends T> Collection<V> getAll(Class<V> clazz) {
+  public <V extends T> Iterable<V> getAll(Class<V> clazz) {
     Set<V> results = new HashSet<>();
 
     for (T t : this.getAll()) {

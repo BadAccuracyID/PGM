@@ -2,7 +2,6 @@ package tc.oc.pgm.modules;
 
 import static net.kyori.adventure.text.Component.translatable;
 
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -26,6 +25,7 @@ import org.bukkit.event.entity.PotionSplashEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingBreakEvent;
 import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerBedEnterEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
@@ -38,6 +38,7 @@ import org.bukkit.event.vehicle.VehicleEnterEvent;
 import org.bukkit.event.vehicle.VehicleEntityCollisionEvent;
 import org.bukkit.event.weather.WeatherChangeEvent;
 import org.bukkit.event.world.PortalCreateEvent;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.api.match.MatchScope;
@@ -332,6 +333,13 @@ public class EventFilterMatchModule implements MatchModule, Listener {
   // -----------------------------------
   // -- Player item/inventory actions --
   // -----------------------------------
+
+  @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+  public void onInventoryClick(final InventoryClickEvent event) {
+    if (!event.getInventory().equals(event.getWhoClicked().getInventory())) {
+      cancelUnlessInteracting(event, event.getWhoClicked());
+    }
+  }
 
   @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
   public void onPlayerDropItem(final PlayerDropItemEvent event) {

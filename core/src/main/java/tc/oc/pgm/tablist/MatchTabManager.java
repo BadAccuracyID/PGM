@@ -1,11 +1,13 @@
 package tc.oc.pgm.tablist;
 
-import de.myzelyam.api.vanish.PlayerHideEvent;
+import static tc.oc.pgm.util.player.PlayerComponent.player;
+
+import com.google.common.collect.Range;
 import java.util.Map;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import javax.annotation.Nullable;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,16 +16,19 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.PGM;
 import tc.oc.pgm.api.event.NameDecorationChangeEvent;
 import tc.oc.pgm.api.map.Contributor;
 import tc.oc.pgm.api.match.Match;
+import tc.oc.pgm.api.match.event.MatchAfterLoadEvent;
 import tc.oc.pgm.api.match.event.MatchLoadEvent;
 import tc.oc.pgm.api.match.event.MatchResizeEvent;
 import tc.oc.pgm.api.match.event.MatchUnloadEvent;
 import tc.oc.pgm.api.party.event.PartyRenameEvent;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.api.player.event.MatchPlayerDeathEvent;
+import tc.oc.pgm.api.player.event.PlayerVanishEvent;
 import tc.oc.pgm.events.PlayerJoinMatchEvent;
 import tc.oc.pgm.events.PlayerPartyChangeEvent;
 import tc.oc.pgm.ffa.Tribute;
@@ -33,21 +38,23 @@ import tc.oc.pgm.teams.TeamMatchModule;
 import tc.oc.pgm.teams.events.TeamResizeEvent;
 import tc.oc.pgm.util.bukkit.ViaUtils;
 import tc.oc.pgm.util.collection.DefaultMapAdapter;
+import tc.oc.pgm.util.concurrent.RateLimiter;
+import tc.oc.pgm.util.named.NameStyle;
 import tc.oc.pgm.util.tablist.DynamicTabEntry;
 import tc.oc.pgm.util.tablist.PlayerTabEntry;
 import tc.oc.pgm.util.tablist.TabEntry;
 import tc.oc.pgm.util.tablist.TabManager;
+import tc.oc.pgm.util.text.TextException;
+import tc.oc.pgm.util.text.TextParser;
 
 public class MatchTabManager extends TabManager implements Listener {
 
   // Min and max delay for an update after tab-list is invalidated
-  private static final int MIN_DELAY = 100, MAX_DELAY = 5000;
+  private static final int MIN_DELAY = 100, MAX_DELAY = 5_000;
   // How many MS must be waited for each MS spent rendering
   private static final int TIME_RATIO = 40;
   // How many MS must be waited for each TPS under 20 (last minute average)
   private static final int TPS_RATIO = 1000;
-  // On match load, throttle tab-list until another match unloads, or this many MS pass.
-  private static final int MATCH_LOAD_TIMEOUT = 15_000;
 
   private final Map<Team, TeamTabEntry> teamEntries;
   private final Map<Match, MapTabEntry> mapEntries;
@@ -55,9 +62,15 @@ public class MatchTabManager extends TabManager implements Listener {
   private final Map<Match, MatchFooterTabEntry> footerEntries;
   private final Map<Match, FreeForAllTabEntry> freeForAllEntries;
 
+  private final ScheduledExecutorService executor = PGM.get().getExecutor();
+
   private Future<?> pingUpdateTask;
-  private Future<?> renderTask;
-  private long lastUpdate = 0, renderTime = 0, loadingUntil = 0;
+
+  private boolean renderingEnabled = true;
+  private RenderTask renderTask;
+  private Future<?> renderHeaderFooterTask;
+  private final RateLimiter rateLimit =
+      new RateLimiter(MIN_DELAY, MAX_DELAY, TIME_RATIO, TPS_RATIO);
 
   public MatchTabManager(Plugin plugin) {
     this(
@@ -113,6 +126,8 @@ public class MatchTabManager extends TabManager implements Listener {
     } else {
       PlayerTabEntry.setShowRealPing(false);
     }
+
+    PlayerTabEntry.setPlayerComponent(pl -> player(pl, NameStyle.TAB));
   }
 
   protected static TabEntry[] headerFactory(Match match) {
@@ -126,7 +141,7 @@ public class MatchTabManager extends TabManager implements Listener {
 
   public void disable() {
     if (this.renderTask != null) {
-      this.renderTask.cancel(true);
+      this.renderTask.cancel();
       this.renderTask = null;
     }
     if (this.pingUpdateTask != null) {
@@ -138,28 +153,46 @@ public class MatchTabManager extends TabManager implements Listener {
   }
 
   @Override
-  protected void invalidate() {
-    super.invalidate();
+  protected void scheduleRender() {
+    if (dirty.isHeaderOrFooter() && this.renderHeaderFooterTask == null) {
+      this.renderHeaderFooterTask =
+          executor.schedule(
+              () -> {
+                this.renderHeaderFooterTask = null;
+                this.renderHeaderFooter();
+              },
+              100,
+              TimeUnit.MILLISECONDS);
+    }
 
-    if (this.renderTask == null) {
-      Runnable render =
-          () -> {
-            long start = System.currentTimeMillis();
-            MatchTabManager.this.renderTask = null;
-            MatchTabManager.this.render();
-            lastUpdate = System.currentTimeMillis();
-            renderTime = lastUpdate - start;
-          };
+    // Already a priority task scheduled, nothing to be done
+    if (dirty.isLayoutOrContent() && renderingEnabled) {
+      if (dirty.isPriority()) {
+        if (renderTask == null || !renderTask.isPriority()) {
+          cancelScheduledRender();
+          this.renderTask = new RenderTask(true, 100);
+        }
+      } else if (renderTask == null) {
+        this.renderTask = new RenderTask(false, rateLimit.getDelay());
+      }
+    }
+  }
 
-      long now = System.currentTimeMillis();
+  private void cancelScheduledRender() {
+    if (renderTask != null) {
+      renderTask.cancel();
+      this.renderTask = null;
+    }
+  }
 
-      long nextUpdate =
-          (lastUpdate - now)
-              + (renderTime * TIME_RATIO)
-              + (long) Math.max(0, (20 - Bukkit.getServer().spigot().getTPS()[0]) * TPS_RATIO)
-              + (loadingUntil > now ? MAX_DELAY : 0);
-      nextUpdate = Math.min(Math.max(MIN_DELAY, nextUpdate), MAX_DELAY);
-      this.renderTask = PGM.get().getExecutor().schedule(render, nextUpdate, TimeUnit.MILLISECONDS);
+  private void setRenderingEnabled(boolean enabled) {
+    if (enabled != renderingEnabled) {
+      this.renderingEnabled = enabled;
+      if (renderingEnabled) {
+        scheduleRender();
+      } else {
+        cancelScheduledRender();
+      }
     }
   }
 
@@ -238,12 +271,25 @@ public class MatchTabManager extends TabManager implements Listener {
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onMatchLoad(MatchLoadEvent event) {
-    loadingUntil = System.currentTimeMillis() + MATCH_LOAD_TIMEOUT;
+    setRenderingEnabled(false);
+    cancelScheduledRender();
+  }
+
+  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+  public void onMatchLoad(MatchAfterLoadEvent event) {
+    setRenderingEnabled(true);
+    // No regular renders for 5s after cycle, priority renders can still occur
+    rateLimit.timeOut(5_000);
+
+    // One priority render scheduled, essentially forcing one full re-render
+    enabledViews.forEach(
+        (player, view) -> {
+          if (view != null) view.getDirtyTracker().prioritize();
+        });
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onMatchUnload(MatchUnloadEvent event) {
-    loadingUntil = 0;
     TeamMatchModule tmm = event.getMatch().getModule(TeamMatchModule.class);
     if (tmm != null) {
       for (Team team : tmm.getTeams()) {
@@ -310,18 +356,62 @@ public class MatchTabManager extends TabManager implements Listener {
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  public void onVanish(PlayerHideEvent event) {
-    MatchPlayer player = PGM.get().getMatchManager().getPlayer(event.getPlayer());
-    if (player == null) {
-      return;
-    }
-
-    invalidate(player);
+  public void onVanish(PlayerVanishEvent event) {
+    invalidate(event.getPlayer());
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onPlayerNameChange(NameDecorationChangeEvent event) {
     TabEntry entry = getPlayerEntryOrNull(Bukkit.getPlayer(event.getUUID()));
     if (entry instanceof DynamicTabEntry) ((DynamicTabEntry) entry).invalidate();
+  }
+
+  private Integer getRenderBatchSize() {
+    try {
+      Map<String, Object> experiments = PGM.get().getConfiguration().getExperiments();
+
+      Object value = experiments.get("tablist-batch-size");
+      if (value == null) return null;
+
+      return TextParser.parseInteger(value.toString(), Range.atLeast(1));
+    } catch (TextException t) {
+      return null;
+    }
+  }
+
+  private class RenderTask implements Runnable {
+
+    private final boolean priority;
+    private final Future<?> future;
+
+    public RenderTask(boolean priority, long millis) {
+      this.priority = priority;
+      this.future = executor.schedule(this, millis, TimeUnit.MILLISECONDS);
+    }
+
+    public boolean isPriority() {
+      return priority;
+    }
+
+    public void cancel() {
+      this.future.cancel(true);
+    }
+
+    @Override
+    public void run() {
+      renderTask = null;
+      if (priority) {
+        priorityRender();
+      } else {
+        rateLimit.beforeTask();
+        Integer batchSize = getRenderBatchSize();
+        if (batchSize != null) partialRender(batchSize);
+        else render();
+        rateLimit.afterTask();
+      }
+
+      // Try to re-schedule if anything is still dirty
+      if (dirty.isDirty()) scheduleRender();
+    }
   }
 }

@@ -1,6 +1,6 @@
 package tc.oc.pgm.classes;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -13,16 +13,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 import org.bukkit.material.MaterialData;
 import org.jdom2.Document;
 import org.jdom2.Element;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.map.MapModule;
 import tc.oc.pgm.api.map.MapTag;
 import tc.oc.pgm.api.map.factory.MapFactory;
 import tc.oc.pgm.api.map.factory.MapModuleFactory;
 import tc.oc.pgm.api.match.Match;
-import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.kits.Kit;
 import tc.oc.pgm.kits.KitModule;
 import tc.oc.pgm.kits.KitParser;
@@ -31,7 +30,7 @@ import tc.oc.pgm.util.xml.InvalidXMLException;
 import tc.oc.pgm.util.xml.Node;
 import tc.oc.pgm.util.xml.XMLUtils;
 
-public class ClassModule implements MapModule {
+public class ClassModule implements MapModule<ClassMatchModule> {
 
   private static final Collection<MapTag> TAGS =
       ImmutableList.of(new MapTag("classes", "Classes", false, true));
@@ -40,9 +39,9 @@ public class ClassModule implements MapModule {
   final PlayerClass defaultClass;
 
   public ClassModule(String family, Map<String, PlayerClass> classes, PlayerClass defaultClass) {
-    this.family = checkNotNull(family, "family");
-    this.classes = ImmutableMap.copyOf(checkNotNull(classes, "classes"));
-    this.defaultClass = checkNotNull(defaultClass, "default class");
+    this.family = assertNotNull(family, "family");
+    this.classes = ImmutableMap.copyOf(assertNotNull(classes, "classes"));
+    this.defaultClass = assertNotNull(defaultClass, "default class");
   }
 
   @Override
@@ -51,7 +50,7 @@ public class ClassModule implements MapModule {
   }
 
   @Override
-  public MatchModule createMatchModule(Match match) {
+  public ClassMatchModule createMatchModule(Match match) {
     return new ClassMatchModule(match, this.family, this.classes, this.defaultClass);
   }
 
@@ -69,7 +68,7 @@ public class ClassModule implements MapModule {
 
   public static class Factory implements MapModuleFactory<ClassModule> {
     @Override
-    public Collection<Class<? extends MapModule>> getSoftDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getSoftDependencies() {
       return Collections.singleton(KitModule.class);
     }
 
@@ -178,7 +177,7 @@ public class ClassModule implements MapModule {
         kits.add(kit);
       }
 
-      MaterialData icon = XMLUtils.parseMaterialData(Node.fromAttr(classEl, "icon"));
+      MaterialData icon = XMLUtils.parseMaterialData(Node.fromRequiredAttr(classEl, "icon"));
 
       boolean restrict = XMLUtils.parseBoolean(classEl.getAttribute("restrict"), false);
 

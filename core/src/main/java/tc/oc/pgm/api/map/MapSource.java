@@ -2,11 +2,16 @@ package tc.oc.pgm.api.map;
 
 import java.io.File;
 import java.io.InputStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collection;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.map.exception.MapMissingException;
+import tc.oc.pgm.api.map.includes.MapInclude;
 
 /** A source where {@link MapInfo} documents and files are downloaded. */
 public interface MapSource {
-  String FILE = "map.xml";
+  Path FILE = Paths.get("map.xml");
 
   /**
    * Get a unique identifier for the source, should be human-readable.
@@ -14,6 +19,22 @@ public interface MapSource {
    * @return A unique identifier.
    */
   String getId();
+
+  /**
+   * The variant of the map this is for
+   *
+   * @return the variant the source, null for the parent source
+   */
+  @Nullable
+  String getVariant();
+
+  /**
+   * A copy of the map source, tailored to a specific variant
+   *
+   * @param variant variant to use
+   * @return a new instance of map source, using the variant
+   */
+  MapSource asVariant(String variant);
 
   /**
    * Download the {@link org.bukkit.World} files to a local directory.
@@ -38,4 +59,11 @@ public interface MapSource {
    * @throws MapMissingException If the document can no longer be found.
    */
   boolean checkForUpdates() throws MapMissingException;
+
+  /**
+   * Sets the collection of includes the map source references
+   *
+   * @param include The {@link MapInclude}
+   */
+  void setIncludes(Collection<MapInclude> include);
 }

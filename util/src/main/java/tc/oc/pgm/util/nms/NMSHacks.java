@@ -13,7 +13,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.annotation.Nullable;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.minecraft.server.v1_8_R3.*;
 import net.minecraft.server.v1_8_R3.Item;
@@ -42,6 +41,7 @@ import org.bukkit.material.MaterialData;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scoreboard.NameTagVisibility;
 import org.bukkit.util.Vector;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.util.attribute.AttributeModifier;
 import tc.oc.pgm.util.block.RayBlockIntersection;
 import tc.oc.pgm.util.bukkit.BukkitUtils;
@@ -1327,6 +1327,21 @@ public interface NMSHacks {
     public void wear(Player viewer, int slot, ItemStack item) {}
   }
 
+  class EntityPotion extends net.minecraft.server.v1_8_R3.EntityPotion {
+    public EntityPotion(Location location, ItemStack potionItem) {
+      super(
+          ((CraftWorld) location.getWorld()).getHandle(),
+          location.getX(),
+          location.getY(),
+          location.getZ(),
+          CraftItemStack.asNMSCopy(potionItem));
+    }
+
+    public void spawn() {
+      world.addEntity(this);
+    }
+  }
+
   static void setFireworksExpectedLifespan(Firework firework, int ticks) {
     ((CraftFirework) firework).getHandle().expectedLifespan = ticks;
   }
@@ -1354,5 +1369,21 @@ public interface NMSHacks {
         item, new PacketPlayOutCollect(item.getEntityId(), player.getEntityId()));
 
     item.remove();
+  }
+
+  static void freezeEntity(Entity entity) {
+    net.minecraft.server.v1_8_R3.Entity nmsEntity = ((CraftEntity) entity).getHandle();
+    NBTTagCompound tag = new NBTTagCompound();
+    nmsEntity.c(tag); // save to tag
+    tag.setBoolean("NoAI", true);
+    tag.setBoolean("NoGravity", true);
+    nmsEntity.f(tag); // load from tag
+  }
+
+  static void setFireballDirection(Fireball entity, Vector direction) {
+    EntityFireball fireball = ((CraftFireball) entity).getHandle();
+    fireball.dirX = direction.getX() * 0.1D;
+    fireball.dirY = direction.getY() * 0.1D;
+    fireball.dirZ = direction.getZ() * 0.1D;
   }
 }

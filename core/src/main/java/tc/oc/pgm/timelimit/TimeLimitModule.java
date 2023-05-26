@@ -4,10 +4,10 @@ import com.google.common.collect.ImmutableList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 import org.jdom2.Attribute;
 import org.jdom2.Document;
 import org.jdom2.Element;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.map.MapModule;
 import tc.oc.pgm.api.map.MapProtos;
 import tc.oc.pgm.api.map.MapTag;
@@ -45,7 +45,7 @@ public class TimeLimitModule implements MapModule<TimeLimitMatchModule> {
 
     @Nullable
     @Override
-    public Collection<Class<? extends MapModule>> getWeakDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getWeakDependencies() {
       return ImmutableList.of(TeamModule.class);
     }
 
@@ -102,7 +102,7 @@ public class TimeLimitModule implements MapModule<TimeLimitMatchModule> {
         throws InvalidXMLException {
       if (attr == null) return null;
       try {
-        return VictoryConditions.parse(factory, attr.getValue());
+        return VictoryConditions.parseNullable(factory, attr.getValue());
       } catch (TextException e) {
         throw new InvalidXMLException(e.getLocalizedMessage(), attr);
       }

@@ -13,16 +13,15 @@ import tc.oc.pgm.api.map.MapModule;
 import tc.oc.pgm.api.map.factory.MapFactory;
 import tc.oc.pgm.api.map.factory.MapModuleFactory;
 import tc.oc.pgm.api.match.Match;
-import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.filters.FilterModule;
-import tc.oc.pgm.filters.FilterParser;
-import tc.oc.pgm.filters.InverseFilter;
+import tc.oc.pgm.filters.operator.InverseFilter;
+import tc.oc.pgm.filters.parse.FilterParser;
 import tc.oc.pgm.regions.RegionModule;
 import tc.oc.pgm.teams.TeamModule;
 import tc.oc.pgm.util.xml.InvalidXMLException;
 import tc.oc.pgm.util.xml.XMLUtils;
 
-public class ProximityAlarmModule implements MapModule {
+public class ProximityAlarmModule implements MapModule<ProximityAlarmMatchModule> {
   private final Set<ProximityAlarmDefinition> definitions;
 
   public ProximityAlarmModule(Set<ProximityAlarmDefinition> definitions) {
@@ -30,13 +29,13 @@ public class ProximityAlarmModule implements MapModule {
   }
 
   @Override
-  public MatchModule createMatchModule(Match match) {
+  public ProximityAlarmMatchModule createMatchModule(Match match) {
     return new ProximityAlarmMatchModule(match, this.definitions);
   }
 
   public static class Factory implements MapModuleFactory<ProximityAlarmModule> {
     @Override
-    public Collection<Class<? extends MapModule>> getSoftDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getSoftDependencies() {
       return ImmutableList.of(TeamModule.class, RegionModule.class, FilterModule.class);
     }
 

@@ -2,19 +2,19 @@ package tc.oc.pgm.api.player;
 
 import java.util.List;
 import java.util.UUID;
-import javax.annotation.Nullable;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.PlayerInventory;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.filter.query.PlayerQuery;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.match.Tickable;
 import tc.oc.pgm.api.party.Competitor;
 import tc.oc.pgm.api.party.Party;
 import tc.oc.pgm.api.setting.Settings;
-import tc.oc.pgm.filters.dynamic.Filterable;
+import tc.oc.pgm.filters.Filterable;
 import tc.oc.pgm.kits.Kit;
 import tc.oc.pgm.util.Audience;
 import tc.oc.pgm.util.attribute.Attribute;
@@ -136,14 +136,6 @@ public interface MatchPlayer
   boolean isFrozen();
 
   /**
-   * Get whether the {@link MatchPlayer} is currently vanished. Determines whether to display to
-   * non-staff or not.
-   *
-   * @return Whether the {@link MatchPlayer} is vanished.
-   */
-  boolean isVanished();
-
-  /**
    * Get whether the {@link MatchPlayer} is using a legacy version (1.7.X)
    *
    * @return Whether the {@link MatchPlayer} is using a legacy version
@@ -215,13 +207,6 @@ public interface MatchPlayer
    * @param gameMode - The gamemode to set
    */
   void setGameMode(GameMode gameMode);
-
-  /**
-   * Mark the {@link MatchPlayer} as vanished or not.
-   *
-   * @param vanished - Whether the player is vanished
-   */
-  void setVanished(boolean vanished);
 
   /**
    * Get the protocol version of the {@link MatchPlayer}'s client

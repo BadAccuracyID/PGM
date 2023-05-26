@@ -4,16 +4,17 @@ import static net.kyori.adventure.text.Component.text;
 import static tc.oc.pgm.util.text.TextException.exception;
 import static tc.oc.pgm.util.text.TextException.noPermission;
 
-import app.ashcon.intake.Command;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.ChatColor;
-import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.goals.Goal;
 import tc.oc.pgm.goals.GoalMatchModule;
 import tc.oc.pgm.goals.ProximityGoal;
 import tc.oc.pgm.goals.ProximityMetric;
+import tc.oc.pgm.goals.ShowOption;
 import tc.oc.pgm.goals.TouchableGoal;
 import tc.oc.pgm.teams.Team;
 import tc.oc.pgm.teams.TeamMatchModule;
@@ -22,10 +23,9 @@ import tc.oc.pgm.util.text.TextTranslations;
 // TODO: make the output nicer and translate
 public final class ProximityCommand {
 
-  @Command(
-      aliases = {"proximity", "prox"},
-      desc = "Show the progress of each objective")
-  public void proximity(MatchPlayer player, Match match) {
+  @CommandMethod("proximity|prox")
+  @CommandDescription("Show the progress of each objective")
+  public void proximity(MatchPlayer player, TeamMatchModule tmm, GoalMatchModule gmm) {
     if (player != null && player.isParticipating()) {
       throw noPermission();
     }
@@ -33,12 +33,11 @@ public final class ProximityCommand {
     // TODO: use components
     List<String> lines = new ArrayList<>();
 
-    for (Team team : match.needModule(TeamMatchModule.class).getParticipatingTeams()) {
+    for (Team team : tmm.getParticipatingTeams()) {
       boolean teamHeader = false;
-      final GoalMatchModule gmm = match.needModule(GoalMatchModule.class);
 
       for (Goal<?> goal : gmm.getGoals(team)) {
-        if (goal instanceof TouchableGoal && goal.isVisible()) {
+        if (goal instanceof TouchableGoal && goal.hasShowOption(ShowOption.SHOW_INFO)) {
           TouchableGoal touchable = (TouchableGoal) goal;
           ProximityGoal proximity = (ProximityGoal) goal;
 

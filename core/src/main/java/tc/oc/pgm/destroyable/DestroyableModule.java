@@ -20,6 +20,7 @@ import tc.oc.pgm.api.region.Region;
 import tc.oc.pgm.blockdrops.BlockDropsModule;
 import tc.oc.pgm.goals.GoalMatchModule;
 import tc.oc.pgm.goals.ProximityMetric;
+import tc.oc.pgm.goals.ShowOptions;
 import tc.oc.pgm.modes.Mode;
 import tc.oc.pgm.modes.ObjectiveModesModule;
 import tc.oc.pgm.regions.BlockBoundedValidation;
@@ -33,7 +34,7 @@ import tc.oc.pgm.util.xml.InvalidXMLException;
 import tc.oc.pgm.util.xml.Node;
 import tc.oc.pgm.util.xml.XMLUtils;
 
-public class DestroyableModule implements MapModule {
+public class DestroyableModule implements MapModule<DestroyableMatchModule> {
 
   private static final Collection<MapTag> TAGS =
       ImmutableList.of(new MapTag("dtm", "monument", "Destroy the Monument", true, false));
@@ -49,7 +50,7 @@ public class DestroyableModule implements MapModule {
   }
 
   @Override
-  public MatchModule createMatchModule(Match match) {
+  public DestroyableMatchModule createMatchModule(Match match) {
     ImmutableList.Builder<Destroyable> destroyables = new ImmutableList.Builder<>();
     for (DestroyableFactory factory : this.destroyableFactories) {
       Destroyable destroyable = new Destroyable(factory, match);
@@ -66,24 +67,21 @@ public class DestroyableModule implements MapModule {
   }
 
   public static class Factory implements MapModuleFactory<DestroyableModule> {
-    private MapFactory factory;
 
     @Override
-    public Collection<Class<? extends MapModule>> getWeakDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getWeakDependencies() {
       return ImmutableList.of(BlockDropsModule.class, ObjectiveModesModule.class);
     }
 
     @Override
-    public Collection<Class<? extends MapModule>> getSoftDependencies() {
+    public Collection<Class<? extends MapModule<?>>> getSoftDependencies() {
       return ImmutableList.of(TeamModule.class, RegionModule.class);
     }
 
     @Override
     public DestroyableModule parse(MapFactory context, Logger logger, Document doc)
         throws InvalidXMLException {
-      this.factory = context;
       List<DestroyableFactory> destroyables = Lists.newArrayList();
-      TeamModule teamModule = context.getModule(TeamModule.class);
       RegionParser regionParser = context.getRegions();
 
       for (Element destroyableEl :
@@ -108,8 +106,8 @@ public class DestroyableModule implements MapModule {
           regionParser.validate(region, BlockBoundedValidation.INSTANCE, new Node(destroyableEl));
         } else {
           region =
-              regionParser.parseRequiredRegionProperty(
-                  destroyableEl, BlockBoundedValidation.INSTANCE, "region");
+              regionParser.parseRequiredProperty(
+                  destroyableEl, "region", BlockBoundedValidation.INSTANCE);
         }
 
         String id = destroyableEl.getAttributeValue("id");
@@ -123,7 +121,7 @@ public class DestroyableModule implements MapModule {
           if (destroyableEl.getAttribute("mode-changes") != null) {
             throw new InvalidXMLException("Cannot combine modes and mode-changes", destroyableEl);
           }
-          modeSet = parseModeSet(modes); // Specific set of modes
+          modeSet = parseModeSet(context, modes); // Specific set of modes
         } else if (XMLUtils.parseBoolean(destroyableEl.getAttribute("mode-changes"), false)) {
           modeSet = null; // All modes
         } else {
@@ -134,7 +132,7 @@ public class DestroyableModule implements MapModule {
             XMLUtils.parseBoolean(destroyableEl.getAttribute("show-progress"), false);
         boolean sparks = XMLUtils.parseBoolean(destroyableEl.getAttribute("sparks"), false);
         boolean repairable = XMLUtils.parseBoolean(destroyableEl.getAttribute("repairable"), true);
-        boolean visible = XMLUtils.parseBoolean(destroyableEl.getAttribute("show"), true);
+        ShowOptions options = ShowOptions.parse(context.getFilters(), destroyableEl);
         Boolean required = XMLUtils.parseBoolean(destroyableEl.getAttribute("required"), null);
         ProximityMetric proximityMetric =
             ProximityMetric.parse(
@@ -145,7 +143,7 @@ public class DestroyableModule implements MapModule {
                 id,
                 name,
                 required,
-                visible,
+                options,
                 owner,
                 proximityMetric,
                 region,
@@ -167,7 +165,8 @@ public class DestroyableModule implements MapModule {
       }
     }
 
-    public ImmutableSet<Mode> parseModeSet(Node node) throws InvalidXMLException {
+    public ImmutableSet<Mode> parseModeSet(MapFactory factory, Node node)
+        throws InvalidXMLException {
       ImmutableSet.Builder<Mode> modes = ImmutableSet.builder();
       for (String modeId : node.getValue().split("\\s")) {
         Mode mode = factory.getFeatures().get(modeId, Mode.class);

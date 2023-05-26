@@ -1,13 +1,8 @@
 package tc.oc.pgm.api.setting;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static tc.oc.pgm.util.Assert.assertNotNull;
 
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import javax.annotation.Nullable;
 import org.bukkit.DyeColor;
-import tc.oc.pgm.util.StringUtils;
 
 /**
  * Values of a particular {@link SettingKey}, a toggleable setting.
@@ -20,20 +15,25 @@ public enum SettingValue {
   CHAT_ADMIN("chat", "admin", DyeColor.RED), // Send to all server operators
 
   DEATH_OWN("death", "own", DyeColor.RED), // Only send death messages involving self
-  DEATH_ALL("death", "all", DyeColor.GREEN), // Send all death messages, highlight your own
+  DEATH_ALL("death", "all", DyeColor.ORANGE), // Send all death messages, highlight your own
+  DEATH_FRIENDS(
+      "death", "friends", DyeColor.GREEN), // Only send death messages involving yourself or friends
 
   PICKER_AUTO("picker", "auto", DyeColor.ORANGE), // Display after cycle, or with permissions.
   PICKER_ON("picker", "on", DyeColor.GREEN), // Display the picker GUI always
   PICKER_OFF("picker", "off", DyeColor.RED), // Never display the picker GUI
 
   JOIN_ON("join", "all", DyeColor.ORANGE), // Send all join messages
+  JOIN_FRIENDS("join", "friends", DyeColor.GREEN), // Only send friend join messages
   JOIN_OFF("join", "none", DyeColor.RED), // Never send join messages
 
-  MESSAGE_ON("message", "on", DyeColor.GREEN), // Always accept direct messages
-  MESSAGE_OFF("message", "off", DyeColor.RED), // Never accept direct messages
+  MESSAGE_ON("message", "all", DyeColor.GREEN), // Always accept direct messages
+  MESSAGE_FRIEND("message", "friends", DyeColor.YELLOW), // Only accept friend direct messages
+  MESSAGE_OFF("message", "none", DyeColor.RED), // Never accept direct messages
 
-  OBSERVERS_ON("observers", "on", DyeColor.GREEN), // Show observers
-  OBSERVERS_OFF("observers", "off", DyeColor.RED), // Hide observers
+  OBSERVERS_ON("observers", "all", DyeColor.GREEN), // Show observers
+  OBSERVERS_FRIEND("observers", "friends", DyeColor.YELLOW), // Only show friend observers
+  OBSERVERS_OFF("observers", "none", DyeColor.RED), // Hide observers
 
   SOUNDS_ALL("sounds", "all", DyeColor.GREEN), // Play all sounds
   SOUNDS_DM("sounds", "messages", DyeColor.ORANGE), // Only play DM sounds
@@ -57,9 +57,9 @@ public enum SettingValue {
   private final DyeColor color;
 
   SettingValue(String group, String name, DyeColor color) {
-    this.key = checkNotNull(group);
-    this.name = checkNotNull(name);
-    this.color = checkNotNull(color);
+    this.key = assertNotNull(group);
+    this.name = assertNotNull(name);
+    this.color = assertNotNull(color);
   }
 
   /**
@@ -83,7 +83,7 @@ public enum SettingValue {
   /**
    * Get {@link DyeColor} related to this setting value .
    *
-   * @see {@link SettingMenu} for usage.
+   * @see tc.oc.pgm.settings.SettingsMenu for usage.
    * @return {@link DyeColor} for this setting value.
    */
   public DyeColor getColor() {
@@ -93,19 +93,5 @@ public enum SettingValue {
   @Override
   public String toString() {
     return getName();
-  }
-
-  public static SettingValue search(SettingKey key, @Nullable String query) {
-    final SettingValue value =
-        StringUtils.bestFuzzyMatch(
-            query,
-            Stream.of(SettingValue.values())
-                .filter(entry -> entry.getKey().equals(key))
-                .collect(Collectors.toMap(SettingValue::getName, Function.identity())),
-            0.6);
-    if (value == null) {
-      return key.getDefaultValue();
-    }
-    return value;
   }
 }

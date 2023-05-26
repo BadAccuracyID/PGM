@@ -10,13 +10,13 @@ import static tc.oc.pgm.util.text.TemporalComponent.clock;
 import static tc.oc.pgm.util.text.TemporalComponent.seconds;
 
 import java.time.Duration;
-import javax.annotation.Nullable;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.title.Title;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.events.CountdownCancelEvent;
 import tc.oc.pgm.events.CountdownEndEvent;
@@ -98,7 +98,7 @@ public abstract class MatchCountdown extends Countdown {
               title(
                   text(remaining.getSeconds(), NamedTextColor.YELLOW),
                   empty(),
-                  Title.Times.of(Duration.ZERO, fromTicks(5), fromTicks(15))));
+                  Title.Times.times(Duration.ZERO, fromTicks(5), fromTicks(15))));
     }
 
     super.onTick(remaining, total);
@@ -153,10 +153,10 @@ public abstract class MatchCountdown extends Countdown {
   }
 
   protected Component secondsRemaining(TextColor color) {
-    return seconds(remaining.getSeconds(), color).build();
+    return seconds(remaining.getSeconds(), color);
   }
 
-  protected TextComponent.Builder colonTime() {
+  protected TextComponent colonTime() {
     return clock(remaining).color(urgencyColor());
   }
 

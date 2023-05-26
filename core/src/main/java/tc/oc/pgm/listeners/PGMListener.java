@@ -1,17 +1,17 @@
 package tc.oc.pgm.listeners;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static net.kyori.adventure.text.Component.*;
+import static net.kyori.adventure.text.Component.space;
+import static net.kyori.adventure.text.Component.text;
+import static net.kyori.adventure.text.Component.translatable;
 
-import java.util.Collection;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.md_5.bungee.api.ChatColor;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Entity;
@@ -21,8 +21,16 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.*;
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
+import org.bukkit.event.player.PlayerFishEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerLoginEvent.Result;
+import org.bukkit.event.player.PlayerPickupItemEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.vehicle.VehicleUpdateEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
@@ -37,15 +45,14 @@ import tc.oc.pgm.api.match.event.MatchFinishEvent;
 import tc.oc.pgm.api.match.event.MatchLoadEvent;
 import tc.oc.pgm.api.match.event.MatchStartEvent;
 import tc.oc.pgm.api.player.MatchPlayer;
-import tc.oc.pgm.api.setting.SettingKey;
-import tc.oc.pgm.api.setting.SettingValue;
 import tc.oc.pgm.events.MapPoolAdjustEvent;
 import tc.oc.pgm.events.PlayerJoinMatchEvent;
-import tc.oc.pgm.events.PlayerParticipationStopEvent;
+import tc.oc.pgm.events.PlayerLeavePartyEvent;
 import tc.oc.pgm.gamerules.GameRulesMatchModule;
 import tc.oc.pgm.modules.WorldTimeModule;
 import tc.oc.pgm.util.UsernameFormatUtils;
-import tc.oc.pgm.util.named.NameStyle;
+import tc.oc.pgm.util.bukkit.WorldBorders;
+import tc.oc.pgm.util.event.PlayerCoarseMoveEvent;
 import tc.oc.pgm.util.nms.NMSHacks;
 import tc.oc.pgm.util.text.TemporalComponent;
 import tc.oc.pgm.util.text.TextTranslations;
@@ -104,7 +111,7 @@ public class PGMListener implements Listener {
     if (!mm.getMatches().hasNext()) {
       event.disallow(
           AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-          TextTranslations.translate("misc.incorrectWorld", null));
+          TextTranslations.translate("misc.incorrectWorld"));
     }
   }
 
@@ -122,6 +129,9 @@ public class PGMListener implements Listener {
 
   @EventHandler(priority = EventPriority.LOW)
   public void addPlayerOnJoin(final PlayerJoinEvent event) {
+    // Player already left. Because quit already happened, we must ignore the join.
+    if (!event.getPlayer().isOnline()) return;
+
     Match match = this.mm.getMatch(event.getPlayer().getWorld());
     if (match == null) {
       event
@@ -141,66 +151,11 @@ public class PGMListener implements Listener {
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  public void broadcastJoinMessage(final PlayerJoinEvent event) {
-    // Handle join message and send it to all players except the one joining
-    Match match = this.mm.getMatch(event.getPlayer().getWorld());
-    if (match == null) return;
-
-    if (event.getJoinMessage() != null) {
-      event.setJoinMessage(null);
-      MatchPlayer player = match.getPlayer(event.getPlayer());
-      if (player != null) {
-        // Announce actual staff join
-        announceJoinOrLeave(player, true);
-      }
-    }
-  }
-
-  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void removePlayerOnDisconnect(PlayerQuitEvent event) {
     MatchPlayer player = this.mm.getPlayer(event.getPlayer());
     if (player == null) return;
 
-    if (event.getQuitMessage() != null) {
-      // Announce actual staff quit
-      announceJoinOrLeave(player, false);
-      event.setQuitMessage(null);
-    }
-
     player.getMatch().removePlayer(event.getPlayer());
-  }
-
-  public static void announceJoinOrLeave(MatchPlayer player, boolean join) {
-    announceJoinOrLeave(player, join, false, false);
-  }
-
-  public static void announceJoinOrLeave(
-      MatchPlayer player, boolean join, boolean staffOnly, boolean force) {
-    checkNotNull(player);
-    Collection<MatchPlayer> viewers =
-        player.getMatch().getPlayers().stream()
-            .filter(p -> !staffOnly || p.getBukkit().hasPermission(Permissions.STAFF))
-            .collect(Collectors.toList());
-
-    for (MatchPlayer viewer : viewers) {
-      if (player.equals(viewer)) continue;
-      if (!staffOnly && player.isVanished() && viewer.getBukkit().hasPermission(Permissions.STAFF))
-        continue; // Skip staff during fake broadcast
-
-      final String key =
-          (join ? "misc.join" : "misc.leave")
-              + (staffOnly && (player.isVanished() || force) ? ".quiet" : "");
-
-      SettingValue option = viewer.getSettings().getValue(SettingKey.JOIN);
-      if (option.equals(SettingValue.JOIN_ON)) {
-        Component component =
-            translatable(key, NamedTextColor.YELLOW, player.getName(NameStyle.CONCISE));
-        viewer.sendMessage(
-            staffOnly
-                ? ChatDispatcher.ADMIN_CHAT_PREFIX.append(component.color(NamedTextColor.YELLOW))
-                : component.color(NamedTextColor.YELLOW));
-      }
-    }
   }
 
   @EventHandler(ignoreCancelled = true)
@@ -280,20 +235,15 @@ public class PGMListener implements Listener {
 
   @EventHandler
   public void unlockTime(final MatchStartEvent event) {
-    // if there is a timelock module and it is off, unlock time
-    boolean unlockTime = !event.getMatch().getModule(WorldTimeModule.class).isTimeLocked();
-
-    GameRulesMatchModule gameRulesMatchModule =
-        event.getMatch().getModule(GameRulesMatchModule.class);
-    if (gameRulesMatchModule != null
-        && Boolean.parseBoolean(
-            gameRulesMatchModule.getGameRule(GameRule.DO_DAYLIGHT_CYCLE.getId()))) {
-      unlockTime = true;
-    }
     event
         .getMatch()
         .getWorld()
-        .setGameRuleValue(GameRule.DO_DAYLIGHT_CYCLE.getId(), Boolean.toString(unlockTime));
+        .setGameRuleValue(
+            GameRule.DO_DAYLIGHT_CYCLE.getId(),
+            event
+                .getMatch()
+                .needModule(GameRulesMatchModule.class)
+                .getGameRule(GameRule.DO_DAYLIGHT_CYCLE.getId()));
   }
 
   @EventHandler
@@ -343,7 +293,7 @@ public class PGMListener implements Listener {
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  public void dropItemsOnQuit(PlayerParticipationStopEvent event) {
+  public void dropItemsOnQuit(PlayerLeavePartyEvent event) {
     MatchPlayer quitter = event.getPlayer();
     if (!quitter.isAlive()) return;
 
@@ -428,5 +378,27 @@ public class PGMListener implements Listener {
 
   public void setGameRule(MatchFinishEvent event, String gameRule, boolean gameRuleValue) {
     event.getMatch().getWorld().setGameRuleValue(gameRule, Boolean.toString(gameRuleValue));
+  }
+
+  /** Prevent teleporting outside the border */
+  @EventHandler(priority = EventPriority.HIGH)
+  public void onPlayerTeleport(final PlayerTeleportEvent event) {
+    if (event.getCause() == PlayerTeleportEvent.TeleportCause.PLUGIN) {
+      if (WorldBorders.isInsideBorder(event.getFrom())
+          && !WorldBorders.isInsideBorder(event.getTo())) {
+        event.setCancelled(true);
+      }
+    }
+  }
+
+  @EventHandler(priority = EventPriority.HIGH)
+  public void onPlayerMove(final PlayerCoarseMoveEvent event) {
+    MatchPlayer player = PGM.get().getMatchManager().getPlayer(event.getPlayer());
+    if (player != null && player.isObserving()) {
+      Location location = event.getTo();
+      if (WorldBorders.clampToBorder(location)) {
+        event.setTo(location);
+      }
+    }
   }
 }

@@ -6,7 +6,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 import org.bukkit.inventory.FurnaceRecipe;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
@@ -15,16 +14,16 @@ import org.bukkit.inventory.ShapelessRecipe;
 import org.jdom2.Attribute;
 import org.jdom2.Document;
 import org.jdom2.Element;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.map.MapModule;
 import tc.oc.pgm.api.map.factory.MapFactory;
 import tc.oc.pgm.api.map.factory.MapModuleFactory;
 import tc.oc.pgm.api.match.Match;
-import tc.oc.pgm.api.match.MatchModule;
 import tc.oc.pgm.util.material.matcher.SingleMaterialMatcher;
 import tc.oc.pgm.util.xml.InvalidXMLException;
 import tc.oc.pgm.util.xml.XMLUtils;
 
-public class CraftingModule implements MapModule {
+public class CraftingModule implements MapModule<CraftingMatchModule> {
 
   private final Set<Recipe> customRecipes;
   private final Set<SingleMaterialMatcher> disabledRecipes;
@@ -35,7 +34,7 @@ public class CraftingModule implements MapModule {
   }
 
   @Override
-  public MatchModule createMatchModule(Match match) {
+  public CraftingMatchModule createMatchModule(Match match) {
     return new CraftingMatchModule(match, customRecipes, disabledRecipes);
   }
 

@@ -1,7 +1,9 @@
 package tc.oc.pgm.events;
 
+import org.jetbrains.annotations.NotNull;
 import tc.oc.pgm.api.party.Competitor;
 import tc.oc.pgm.api.player.MatchPlayer;
+import tc.oc.pgm.join.JoinRequest;
 
 /**
  * Called immediately before a player joins a {@link Competitor}. This differs from {@link
@@ -13,7 +15,8 @@ import tc.oc.pgm.api.player.MatchPlayer;
  * <p>If cancellation is not required, {@link PlayerPartyChangeEvent} should be used instead.
  */
 public class PlayerParticipationStartEvent extends PlayerParticipationEvent {
-  public PlayerParticipationStartEvent(MatchPlayer player, Competitor competitor) {
-    super(player, competitor);
+  public PlayerParticipationStartEvent(
+      @NotNull MatchPlayer player, @NotNull Competitor competitor, @NotNull JoinRequest request) {
+    super(player, competitor, request);
   }
 }

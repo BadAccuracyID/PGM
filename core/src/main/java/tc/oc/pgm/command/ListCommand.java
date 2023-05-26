@@ -1,31 +1,31 @@
 package tc.oc.pgm.command;
 
-import static net.kyori.adventure.text.Component.*;
+import static net.kyori.adventure.text.Component.empty;
+import static net.kyori.adventure.text.Component.text;
+import static net.kyori.adventure.text.Component.translatable;
+import static tc.oc.pgm.api.integration.Integration.isVanished;
 
-import app.ashcon.intake.Command;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
 import java.util.Collection;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 import tc.oc.pgm.api.Permissions;
 import tc.oc.pgm.api.match.Match;
 import tc.oc.pgm.api.player.MatchPlayer;
 import tc.oc.pgm.teams.TeamMatchModule;
 import tc.oc.pgm.util.Audience;
+import tc.oc.pgm.util.Players;
 import tc.oc.pgm.util.named.NameStyle;
 import tc.oc.pgm.util.text.TextFormatter;
 
-// TODO: clean up format and use new components
 public final class ListCommand {
 
-  @Command(
-      aliases = {"list", "who", "online", "ls"},
-      desc = "View a list of online players")
+  @CommandMethod("list|who|online|ls")
+  @CommandDescription("View a list of online players")
   public void list(CommandSender sender, Audience viewer, Match match) {
     TeamMatchModule tmm = match.getModule(TeamMatchModule.class);
     if (tmm != null) {
@@ -85,7 +85,7 @@ public final class ListCommand {
   private Component formatNames(Collection<MatchPlayer> players, CommandSender sender) {
     List<Component> names =
         players.stream()
-            .filter(mp -> sender.hasPermission(Permissions.STAFF) || !isVanished(mp.getId()))
+            .filter(mp -> Players.isVisible(sender, mp.getBukkit()))
             .map(mp -> mp.getName(NameStyle.VERBOSE))
             .collect(Collectors.toList());
 
@@ -103,11 +103,6 @@ public final class ListCommand {
 
   private int getSize(Collection<MatchPlayer> players, boolean vanished) {
     return Math.toIntExact(
-        players.stream().filter(mp -> vanished == isVanished(mp.getId())).count());
-  }
-
-  private boolean isVanished(UUID playerId) {
-    Player player = Bukkit.getPlayer(playerId);
-    return player != null && player.hasMetadata("vanished");
+        players.stream().filter(mp -> vanished == isVanished(mp.getBukkit())).count());
   }
 }

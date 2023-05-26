@@ -1,8 +1,8 @@
 package tc.oc.pgm.spawns;
 
 import java.time.Duration;
-import javax.annotation.Nullable;
 import net.kyori.adventure.text.Component;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.filter.Filter;
 import tc.oc.pgm.util.TimeUtils;
 
@@ -25,7 +25,7 @@ public class RespawnOptions {
       Filter filter,
       @Nullable Component message) {
     this.delay = delay;
-    this.delayTicks = Math.max(TimeUtils.toTicks(delay), 20);
+    this.delayTicks = Math.max(TimeUtils.toTicks(delay), 0);
     this.auto = auto;
     this.blackout = blackout;
     this.spectate = spectate;

@@ -2,7 +2,6 @@ package tc.oc.pgm.regions;
 
 import static tc.oc.pgm.api.map.MapProtos.REGION_PRIORITY_VERSION;
 
-import javax.annotation.Nullable;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -30,6 +29,7 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.util.Vector;
+import org.jetbrains.annotations.Nullable;
 import tc.oc.pgm.api.event.BlockTransformEvent;
 import tc.oc.pgm.api.filter.Filter.QueryResponse;
 import tc.oc.pgm.api.filter.query.BlockQuery;
@@ -260,13 +260,10 @@ public class RegionMatchModule implements MatchModule, Listener {
   @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
   public void checkUse(final PlayerInteractEvent event) {
     if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
-      MatchPlayer player = this.match.getParticipant(event.getPlayer());
-      if (player == null) return;
-
       Block block = event.getClickedBlock();
       if (block == null) return;
 
-      this.handleUse(event, block.getState(), player);
+      this.handleUse(event, block.getState(), this.match.getParticipant(event.getPlayer()));
     }
   }
 
@@ -310,8 +307,8 @@ public class RegionMatchModule implements MatchModule, Listener {
     }
   }
 
-  private void handleUse(Event event, BlockState blockState, MatchPlayer player) {
-    if (!player.canInteract()) return;
+  private void handleUse(Event event, BlockState blockState, @Nullable MatchPlayer player) {
+    if (!MatchPlayers.canInteract(player)) return;
 
     PlayerBlockQuery query = new PlayerBlockQuery(event, player, blockState);
 
@@ -372,7 +369,7 @@ public class RegionMatchModule implements MatchModule, Listener {
         && ((Cancellable) query.getEvent()).isCancelled()
         && query instanceof PlayerQuery) {
 
-      MatchPlayer player = match.getPlayer(((PlayerQuery) query).getId());
+      MatchPlayer player = ((PlayerQuery) query).getPlayer();
       if (player != null) player.sendWarning(rfa.message);
     }
   }
