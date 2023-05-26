@@ -9,7 +9,6 @@ import static net.kyori.adventure.text.Component.translatable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import de.myzelyam.api.vanish.PlayerHideEvent;
 import java.util.*;
 import javax.annotation.Nullable;
 import net.kyori.adventure.sound.Sound;
@@ -390,16 +389,6 @@ public class PickerMatchModule implements MatchModule, Listener {
   @EventHandler
   public void giveKitToObservers(final ObserverKitApplyEvent event) {
     refreshKit(event.getPlayer());
-  }
-
-  @EventHandler
-  public void playerVanishRefresh(final PlayerHideEvent event) {
-    MatchPlayer player = this.match.getPlayer(event.getPlayer());
-    if (player == null) {
-      return;
-    }
-
-    refreshKit(player);
   }
 
   @EventHandler
